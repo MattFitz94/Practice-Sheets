@@ -245,8 +245,8 @@ sb.auth.onAuthStateChange(()=>boot());
 let currentTab=null;
 function shell(){
   const tabs = me.role==="coach"
-    ? [["day","The Sheet"],["players","Players"],["library","Drills"],["progress","Progress"]]
-    : [["day","The Sheet"],["progress","Progress"]];
+    ? [["day","The Sheet"],["week","Week"],["players","Players"],["library","Drills"],["progress","Progress"]]
+    : [["day","The Sheet"],["week","Week"],["progress","Progress"]];
   if(!currentTab) currentTab=tabs[0][0];
   app.innerHTML=`
     <header><div class="wrap">
@@ -269,6 +269,7 @@ function renderTab(){
   const v=document.getElementById("tabview");
   v.innerHTML=`<div class="load">Loading</div>`;
   if(currentTab==="day") dayScreen(v);
+  else if(currentTab==="week") weekScreen(v);
   else if(currentTab==="players") coachPlayers(v);
   else if(currentTab==="library") library(v);
   else if(currentTab==="progress") progress(v);
@@ -439,6 +440,116 @@ async function saveDay(){
 }
 function num(x){ return x===""||x==null?null:(+x); }
 function int(x){ return x===""||x==null?0:Math.round(+x); }
+
+/* ============================================================
+   5b. THE WEEK — horizontal Mon–Sun overview + category summary
+   ============================================================ */
+function mondayOf(dateStr){
+  const d=new Date(dateStr+"T00:00:00");
+  const day=(d.getDay()+6)%7; // 0=Mon
+  d.setDate(d.getDate()-day);
+  return d;
+}
+function fmtDay(d){ return d.toLocaleDateString(undefined,{weekday:'short'}); }
+function fmtDate(d){ return d.toLocaleDateString(undefined,{day:'numeric',month:'short'}); }
+function isoDate(d){ return d.toISOString().slice(0,10); }
+
+let weekStart = isoDate(mondayOf(new Date().toISOString().slice(0,10)));
+
+async function weekScreen(v){
+  if(me.role==="coach" && !players.length){
+    v.innerHTML=`<div class="empty">No players linked yet. Open <b>Players</b> to add one.</div>`; return;
+  }
+  const pid = me.role==="coach" ? (activePlayerId||players[0]?.id) : me.id;
+  const mon = mondayOf(weekStart);
+  const days=[...Array(7)].map((_,i)=>{ const d=new Date(mon); d.setDate(d.getDate()+i); return d; });
+  const from=isoDate(days[0]), to=isoDate(days[6]);
+
+  const playerPicker = me.role==="coach"
+    ? `<select id="wpick" style="background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 10px;font-weight:700">${players.map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${esc(p.name)}</option>`).join("")}</select>`
+    : `<span class="who">Your week, <b>${esc(me.full_name||"")}</b></span>`;
+
+  v.innerHTML=`
+    <div class="daybar">
+      <button class="btn btn-ghost btn-sm" id="wprev">‹ Prev</button>
+      <div class="who" style="font-weight:700; color:var(--ink)">${fmtDate(days[0])} – ${fmtDate(days[6])}</div>
+      <button class="btn btn-ghost btn-sm" id="wnext">Next ›</button>
+      <button class="btn btn-ghost btn-sm" id="wthis">This week</button>
+      <span style="margin-left:auto">${playerPicker}</span>
+    </div>
+    <div id="weekbody"><div class="load">Loading the week</div></div>`;
+
+  document.getElementById("wprev").onclick=()=>{ const d=mondayOf(weekStart); d.setDate(d.getDate()-7); weekStart=isoDate(d); weekScreen(v); };
+  document.getElementById("wnext").onclick=()=>{ const d=mondayOf(weekStart); d.setDate(d.getDate()+7); weekStart=isoDate(d); weekScreen(v); };
+  document.getElementById("wthis").onclick=()=>{ weekStart=isoDate(mondayOf(new Date().toISOString().slice(0,10))); weekScreen(v); };
+  if(me.role==="coach"){ document.getElementById("wpick").onchange=e=>{ activePlayerId=e.target.value; weekScreen(v); }; }
+
+  // pull the whole week in one query
+  const {data:sess}=await sb.from("sessions").select("*, drills(name,category)")
+    .eq("player_id",pid).gte("logged_on",from).lte("logged_on",to).order("sort");
+  const rowsByDay={}; days.forEach(d=>rowsByDay[isoDate(d)]=[]);
+  (sess||[]).forEach(s=>{ (rowsByDay[s.logged_on]=rowsByDay[s.logged_on]||[]).push(s); });
+
+  // ----- horizontal week board: one column per day -----
+  const catP=c=>`<span class="pill ${pillClass(c)}" style="font-size:9px; padding:2px 6px">${esc(c||'')}</span>`;
+  let cols="";
+  days.forEach(d=>{
+    const key=isoDate(d), list=rowsByDay[key]||[];
+    const mins=list.reduce((a,s)=>a+(+s.minutes||0),0);
+    const balls=list.reduce((a,s)=>a+(s.balls||0),0);
+    const done=list.filter(s=>s.completed).length;
+    const isToday = key===new Date().toISOString().slice(0,10);
+    cols+=`
+      <div style="min-width:150px; flex:1; border:1px solid var(--line); border-radius:var(--r); background:var(--panel); overflow:hidden">
+        <div style="padding:8px 10px; background:${isToday?'var(--blood)':'var(--panel-2)'}; color:${isToday?'#fff':'var(--ink)'}">
+          <div style="font-weight:800; text-transform:uppercase; font-size:12px; letter-spacing:.04em">${fmtDay(d)}</div>
+          <div style="font-size:11px; opacity:.8">${fmtDate(d)}</div>
+        </div>
+        <div style="padding:8px; display:flex; flex-direction:column; gap:6px; min-height:60px">
+          ${list.length? list.map(s=>`
+            <div style="border:1px solid var(--line); border-radius:7px; padding:6px 7px; background:var(--panel-2)">
+              <div style="display:flex; align-items:center; gap:5px; justify-content:space-between">
+                ${catP(s.drills?.category)}
+                <span class="doneflag ${s.completed?'on':''}" style="font-size:12px">${s.completed?'✓':'·'}</span>
+              </div>
+              <div style="font-size:12px; margin-top:3px; line-height:1.25">${esc(s.drills?.name||'—')}</div>
+              <div style="font-size:10px; color:var(--muted); margin-top:2px">${s.minutes||0}m · ${s.balls||0}b</div>
+            </div>`).join("")
+            : `<div style="color:var(--faint); font-size:11px; text-align:center; padding:14px 4px">—</div>` }
+        </div>
+        <div style="padding:7px 10px; border-top:1px solid var(--line); font-size:11px; color:var(--muted); display:flex; justify-content:space-between">
+          <span>${mins}m · ${balls}b</span><span>${done}/${list.length} ✓</span>
+        </div>
+      </div>`;
+  });
+
+  // ----- weekly category summary -----
+  const byCat={}; CATS.forEach(c=>byCat[c]={mins:0,balls:0,count:0,done:0});
+  let totMins=0,totBalls=0,totCount=0,totDone=0;
+  (sess||[]).forEach(s=>{
+    const c=s.drills?.category||"Technical"; if(!byCat[c])byCat[c]={mins:0,balls:0,count:0,done:0};
+    byCat[c].mins+=+s.minutes||0; byCat[c].balls+=s.balls||0; byCat[c].count++; if(s.completed)byCat[c].done++;
+    totMins+=+s.minutes||0; totBalls+=s.balls||0; totCount++; if(s.completed)totDone++;
+  });
+  const maxMins=Math.max(1,...CATS.map(c=>byCat[c].mins));
+  const summaryRows=CATS.filter(c=>byCat[c].count>0).map(c=>`
+    <div class="barwrap">
+      <div class="lab"><span>${c}</span><span>${byCat[c].count} drills · ${byCat[c].mins}m · ${byCat[c].balls}b</span></div>
+      <div class="bar"><i style="width:${Math.round(byCat[c].mins/maxMins*100)}%; background:var(--blood-2)"></i></div>
+    </div>`).join("") || `<div class="empty">Nothing planned this week yet.</div>`;
+
+  document.getElementById("weekbody").innerHTML=`
+    <div style="overflow-x:auto; padding-bottom:4px">
+      <div style="display:flex; gap:10px; min-width:900px">${cols}</div>
+    </div>
+    <div class="stat-row" style="margin-top:18px">
+      ${stat(totCount,"Drills")}${stat(totMins,"Minutes")}${stat(totBalls,"Balls")}${stat(totCount?Math.round(totDone/totCount*100)+'%':'0%',"Completed")}
+    </div>
+    <div class="card">
+      <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:14px">Category summary · this week</h3>
+      ${summaryRows}
+    </div>`;
+}
 
 /* ============================================================
    6. COACH — PLAYERS

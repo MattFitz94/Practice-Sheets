@@ -3,1003 +3,660 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Readiness</title>
-
+<meta name="theme-color" content="#0a0a0b" />
 <link rel="manifest" href="manifest.json" />
-<meta name="theme-color" content="#04141A" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Readiness" />
-<link rel="apple-touch-icon" href="data:image/png;base64,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" />
-
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet" />
-
-<script src="https://unpkg.com/chart.js@4.4.3/dist/chart.umd.js"></script>
-
+<title>THE WORK</title>
 <style>
-  :root{ color-scheme:dark; }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{
-    background:#04141A;
-    background-image:radial-gradient(120% 80% at 50% -10%, #0A2A34 0%, #061C24 42%, #04141A 100%);
-    background-attachment:fixed;
-    font-family:'Inter',system-ui,-apple-system,sans-serif;
-    -webkit-font-smoothing:antialiased;
-    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
-    color:#DCEEF0;
+  :root{
+    --bg:#0a0a0b; --panel:#141416; --panel-2:#1c1c1f; --line:#2a2a2e;
+    --ink:#f4f2ef; --muted:#8b8a90; --faint:#5a5a60;
+    --blood:#8e1b1b; --blood-2:#b52323; --blood-soft:#2a1414;
+    --gold:#c9a24b;
+    --fair:#3f9e6d; --miss:#c0603f;
+    --r:10px;
   }
-  .wrap{max-width:860px;margin:0 auto;padding:clamp(16px,4vw,40px);}
-  .mono{font-variant-numeric:tabular-nums;}
-  button{font-family:inherit;cursor:pointer;}
-  input{font-family:inherit;}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:"Archivo",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--bg); color:var(--ink);
+    -webkit-font-smoothing:antialiased; line-height:1.45;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  h1,h2,h3{font-family:"Archivo",sans-serif; font-weight:800; margin:0; letter-spacing:-.01em}
+  .display{font-family:"Archivo",sans-serif; font-weight:900; letter-spacing:-.02em; text-transform:uppercase}
+  button{font-family:inherit; cursor:pointer}
+  input,select,textarea{font-family:inherit; font-size:16px}
+  .wrap{max-width:1120px; margin:0 auto; padding:0 16px}
+  a{color:var(--blood-2)}
 
-  .head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:20px;}
-  .title{font-family:'Fraunces',serif;font-size:clamp(28px,7vw,40px);font-weight:600;letter-spacing:-0.02em;text-shadow:0 0 24px rgba(61,224,200,0.25);}
-  .sub{color:#6E9AA0;font-size:14px;margin-top:2px;}
-  .latest{text-align:right;font-size:13px;color:#6E9AA0;}
-  .latest b{color:#DCEEF0;font-size:15px;font-weight:500;}
+  /* header */
+  header{
+    background:linear-gradient(180deg,#111 0%,var(--bg) 100%);
+    border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:30;
+    padding-top:env(safe-area-inset-top);
+  }
+  header .wrap{display:flex; align-items:center; gap:12px; padding-top:12px; padding-bottom:12px}
+  .mark{display:flex; align-items:center; gap:10px}
+  .mark .bar{width:4px; height:26px; background:var(--blood-2); border-radius:2px}
+  .brand{font-family:"Archivo"; font-weight:900; font-size:20px; text-transform:uppercase; letter-spacing:.02em}
+  .brand em{color:var(--blood-2); font-style:normal}
+  .whoami{margin-left:auto; display:flex; align-items:center; gap:12px; font-size:13px; color:var(--muted)}
+  .rolechip{border:1px solid var(--line); color:var(--ink); padding:3px 10px; border-radius:999px; font-size:11px; text-transform:uppercase; letter-spacing:.06em}
+  .signout{background:none; border:0; color:var(--muted); font-size:13px; text-decoration:underline}
 
-  .verdict{border-radius:18px;padding:clamp(20px,4vw,32px);margin-bottom:16px;}
-  .vtop{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
-  .dot{width:64px;height:64px;border-radius:50%;flex-shrink:0;}
-  .vword{font-variant-numeric:tabular-nums;font-size:12px;letter-spacing:0.14em;font-weight:600;}
-  .vhead{font-family:'Fraunces',serif;font-size:clamp(26px,6vw,34px);font-weight:600;line-height:1.1;}
-  .vbody{font-size:15px;line-height:1.6;margin:16px 0 0;max-width:560px;}
-  .conf{display:inline-block;margin-top:14px;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:0.04em;}
-  .bigscore{font-family:'Fraunces',serif;font-size:clamp(58px,16vw,88px);font-weight:600;line-height:0.95;font-variant-numeric:tabular-nums;}
-  .scoreout{font-size:18px;font-weight:600;opacity:0.5;}
-  .scoreside{display:flex;flex-direction:column;justify-content:center;}
-
-  .reason{background:#0A2028;border:1px solid #123845;border-radius:14px;padding:16px 18px;margin-bottom:16px;}
-  .reason h3{margin:0 0 10px;font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:#DCEEF0;}
-  .rline{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #0E2A34;font-size:13.5px;line-height:1.5;}
-  .rline:last-child{border-bottom:none;}
-  .rico{flex-shrink:0;width:18px;text-align:center;}
-  .rup{color:#2FE6B0;} .rdown{color:#FF6B6B;} .rflat{color:#6E9AA0;} .rwarn{color:#E8B65A;}
-
-  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(116px,1fr));gap:12px;margin-bottom:16px;}
-  .stat{background:#0A2028;border:1px solid #123845;border-radius:12px;padding:14px 16px;}
-  .slabel{font-size:11px;color:#6E9AA0;text-transform:uppercase;letter-spacing:0.05em;}
-  .svalue{font-size:24px;font-weight:600;margin-top:4px;font-family:'Fraunces',serif;font-variant-numeric:tabular-nums;}
-  .ssub{font-size:11.5px;color:#6E9AA0;margin-top:2px;font-variant-numeric:tabular-nums;}
-  .ssrc{font-size:10px;color:#3D6B74;margin-top:3px;text-transform:uppercase;letter-spacing:0.06em;}
-
-  .card{background:#0A2028;border:1px solid #123845;border-radius:14px;padding:18px;margin-bottom:16px;}
-  .ctitle{font-family:'Fraunces',serif;font-size:17px;font-weight:600;}
-  .cnote{color:#6E9AA0;font-size:12.5px;margin:2px 0 12px;line-height:1.5;}
-  .cwrap{position:relative;width:100%;}
-
-  .btn{border:none;border-radius:8px;padding:11px 18px;font-size:14px;font-weight:600;}
-  .btn-primary{background:#3DE0C8;color:#04141A;box-shadow:0 0 20px -6px #3DE0C8;}
-  .btn-ghost{background:transparent;color:#6E9AA0;border:1px solid #123845;font-weight:400;}
-  .btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;margin-bottom:8px;}
-
-  .sync{display:flex;align-items:center;gap:10px;background:#0A2028;border:1px solid #123845;border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:#6E9AA0;}
-  .sync .dotlive{width:8px;height:8px;border-radius:50%;background:#2FE6B0;box-shadow:0 0 8px #2FE6B0;flex-shrink:0;}
-  .sync .dotoff{width:8px;height:8px;border-radius:50%;background:#E8B65A;flex-shrink:0;}
-  .sync .doterr{width:8px;height:8px;border-radius:50%;background:#FF6B6B;flex-shrink:0;}
-
-  .panel{background:#0A2028;border:1px solid #123845;border-radius:16px;padding:28px;}
-  .foot{margin-top:24px;color:#6E9AA0;font-size:12px;line-height:1.6;border-top:1px solid #123845;padding-top:16px;}
-  input[type=password],input[type=text]{width:100%;padding:11px 12px;border-radius:8px;border:1px solid #123845;background:#0E2A34;color:#DCEEF0;font-size:15px;}
-  label{font-size:13px;font-weight:600;color:#DCEEF0;display:block;margin-bottom:6px;}
-  #boot{padding:40px 24px;color:#6E9AA0;font-size:14px;}
-  .saved{background:#0E3A38;color:#2FE6B0;font-size:13px;padding:8px 12px;border-radius:8px;margin-bottom:16px;border:1px solid #2FE6B044;}
-  .err{color:#FF6B6B;font-size:13px;margin-top:10px;}
-  .tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;padding:2px 7px;border-radius:6px;margin-left:8px;vertical-align:middle;}
-  .tag-360{background:#12384522;color:#57C7FF;border:1px solid #57C7FF44;}
-  .tag-oura{background:#2FE6B01a;color:#2FE6B0;border:1px solid #2FE6B044;}
+  /* auth */
+  .auth{min-height:88vh; display:flex; align-items:center; justify-content:center; padding:24px 16px}
+  .authcard{width:100%; max-width:420px}
+  .kicker{color:var(--blood-2); font-size:12px; letter-spacing:.28em; text-transform:uppercase; font-weight:700; margin-bottom:14px}
+  .authcard h1{font-size:44px; line-height:.95; text-transform:uppercase; font-weight:900; letter-spacing:-.02em; margin-bottom:10px}
+  .authcard h1 em{color:var(--blood-2); font-style:normal}
+  .authcard .sub{color:var(--muted); font-size:14px; margin-bottom:24px; max-width:34ch}
+  .field{margin-bottom:12px}
+  .field label{display:block; font-size:11px; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.08em}
+  .field input,.field select{width:100%; padding:12px 13px; border:1px solid var(--line); border-radius:var(--r); background:var(--panel); color:var(--ink)}
+  .field input:focus,.field select:focus{outline:none; border-color:var(--blood-2); box-shadow:0 0 0 3px var(--blood-soft)}
+  .btn{border:0; border-radius:var(--r); padding:13px 16px; font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.04em}
+  .btn-primary{background:var(--blood); color:#fff; width:100%}
+  .btn-primary:hover{background:var(--blood-2)}
+  .btn-primary:active{transform:translateY(1px)}
+  .btn-ghost{background:var(--panel); border:1px solid var(--line); color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--faint)}
+  .btn-sm{padding:7px 12px; font-size:12px; border-radius:8px}
+  .switch{margin-top:16px; font-size:13px; color:var(--muted)}
+  .switch a{font-weight:700; text-decoration:none}
+  .err{background:var(--blood-soft); border:1px solid var(--blood); color:#f0b5b5; padding:10px 12px; border-radius:var(--r); font-size:13px; margin-bottom:12px}
 
   /* tabs */
-  .tabbar{position:sticky;top:0;z-index:30;display:flex;gap:4px;overflow-x:auto;background:rgba(4,20,26,0.9);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:10px 0 8px;margin:0 0 16px;border-bottom:1px solid #123845;scrollbar-width:none;}
-  .tabbar::-webkit-scrollbar{display:none;}
-  .tabbtn{flex:0 0 auto;background:transparent;border:1px solid #123845;color:#6E9AA0;border-radius:999px;padding:8px 15px;font-size:13px;font-weight:600;white-space:nowrap;}
-  .tabbtn.active{background:#0E2A34;color:#3DE0C8;border-color:#3DE0C844;box-shadow:0 0 16px -6px #3DE0C8;}
-  .mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px;margin-bottom:14px;}
-  .minicard{background:#0A2028;border:1px solid #123845;border-radius:10px;padding:10px 12px;}
-  .minicard .l{font-size:10px;color:#6E9AA0;text-transform:uppercase;letter-spacing:0.05em;}
-  .minicard .v{font-size:19px;font-weight:600;font-family:'Fraunces',serif;margin-top:3px;font-variant-numeric:tabular-nums;}
-  .needsync{background:#0A2028;border:1px dashed #2FE6B044;border-radius:12px;padding:16px;color:#6E9AA0;font-size:12.5px;line-height:1.5;margin-bottom:16px;}
-  .weekrow{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #0E2A34;font-size:13.5px;}
-  .weekrow:last-child{border-bottom:none;}
-  .chip{display:inline-block;width:12px;height:12px;border-radius:3px;margin-left:3px;}
-  .insight{background:#0A2028;border:1px solid #123845;border-radius:12px;padding:14px 16px;margin-bottom:12px;font-size:13.5px;line-height:1.55;}
-  .insight b{color:#DCEEF0;}
-  .histrow{display:flex;align-items:center;gap:14px;background:#0A2028;border:1px solid #123845;border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;}
-  .histrow:active{background:#0E2A34;}
-  .histscore{font-family:'Fraunces',serif;font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;min-width:44px;text-align:center;}
-  .histmid{flex:1;min-width:0;}
-  .histdate{font-size:14px;font-weight:700;color:#DCEEF0;}
-  .histword{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;}
-  .histmeta{font-size:11.5px;color:#6E9AA0;margin-top:2px;font-variant-numeric:tabular-nums;}
-  .histexp{background:#0A2028;border:1px solid #123845;border-top:none;border-radius:0 0 12px 12px;margin:-8px 0 8px;padding:12px 14px;}
-  .histexp .rline{border-bottom-color:#0E2A34;}
-  .chkbox{width:24px;height:24px;border-radius:7px;border:2px solid #3DE0C8;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s;}
-  .chkbox.on{background:#2FE6B0;border-color:#2FE6B0;}
-  .chkbox.on::after{content:"\2713";color:#04141A;font-weight:800;font-size:15px;}
+  nav.tabs{display:flex; gap:4px; padding:14px 0 6px; position:sticky; top:56px; background:var(--bg); z-index:20; border-bottom:1px solid var(--line)}
+  nav.tabs button{background:none; border:0; padding:9px 14px; font-size:12px; color:var(--muted); border-radius:8px; font-weight:700; text-transform:uppercase; letter-spacing:.05em}
+  nav.tabs button.on{background:var(--blood); color:#fff}
+
+  section{padding:16px 0 40px}
+  .sec-h{display:flex; align-items:flex-end; justify-content:space-between; margin:6px 0 14px; gap:12px; flex-wrap:wrap}
+  .sec-h h2{font-size:22px; text-transform:uppercase; letter-spacing:-.01em}
+  .sec-h .meta{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:16px}
+  .card + .card{margin-top:14px}
+  .mini{font-size:11px; color:var(--muted); display:block; margin-bottom:5px; text-transform:uppercase; letter-spacing:.07em}
+  .card input,.card select,.card textarea{width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--panel-2); color:var(--ink)}
+  .card input:focus,.card select:focus{outline:none; border-color:var(--blood-2)}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px}
+  .inline{display:flex; align-items:center; gap:8px}
+
+  /* day toolbar */
+  .daybar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px}
+  .daybar .dsel{display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:6px 8px}
+  .daybar input[type=date]{background:transparent; border:0; color:var(--ink); font-weight:700}
+  .who{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
+  .who b{color:var(--gold)}
+
+  /* THE GRID */
+  .gridwrap{overflow-x:auto; border:1px solid var(--line); border-radius:var(--r); background:var(--panel)}
+  table.grid{border-collapse:collapse; width:100%; min-width:1120px; font-size:13px}
+  table.grid th{position:sticky; top:0; background:var(--panel-2); text-align:center; padding:9px 8px; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; font-weight:700; border-bottom:1px solid var(--line); white-space:nowrap}
+  table.grid th.l{text-align:left}
+  table.grid td{padding:6px 6px; border-bottom:1px solid var(--line); vertical-align:middle}
+  table.grid tr:last-child td{border-bottom:0}
+  .cell-in{width:52px; padding:6px; border:1px solid var(--line); border-radius:6px; background:var(--panel-2); color:var(--ink); text-align:center; font-size:13px}
+  .cell-in:focus{outline:none; border-color:var(--blood-2)}
+  .cell-txt{width:100%; min-width:120px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--panel-2); color:var(--ink); font-size:13px}
+  .cell-txt:focus{outline:none; border-color:var(--blood-2)}
+  .drillsel{width:100%; min-width:170px; padding:7px; border:1px solid var(--line); border-radius:6px; background:var(--panel-2); color:var(--ink); font-size:13px; font-weight:600}
+  .drillsel:focus{outline:none; border-color:var(--blood-2)}
+  .auto{display:block; padding:6px 4px; text-align:center; color:var(--muted); background:transparent; font-size:12px; white-space:nowrap}
+  .pill{font-size:10px; padding:3px 9px; border-radius:999px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap}
+  .p-Driving{background:#3a2c0c; color:#e6b84e}
+  .p-Approach{background:#0f2c3f; color:#6fb7e6}
+  .p-Putting{background:#0f2f24; color:#5fd0a5}
+  .p-sg{background:#3a1c10; color:#e08a5f}
+  .p-Performance{background:#241d3a; color:#a99cf0}
+  .p-Technical,.p-Practice,.p--{background:#242426; color:#9a978f}
+  .p-oncourse{background:#242426; color:#9a978f}
+  .donebox{width:20px; height:20px; accent-color:var(--blood-2)}
+  .doneflag{color:var(--faint); font-size:14px}
+  .doneflag.on{color:var(--fair)}
+  .rowdel{background:none; border:0; color:var(--faint); font-size:16px; cursor:pointer; padding:2px 6px}
+  .rowdel:hover{color:var(--blood-2)}
+  tfoot td{background:var(--panel-2); font-weight:800; padding:10px 8px; border-top:2px solid var(--line); text-align:center}
+  tfoot td.l{text-align:left; text-transform:uppercase; letter-spacing:.06em; font-size:12px; color:var(--gold)}
+
+  .gridtools{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap}
+  .savebar{display:flex; align-items:center; gap:10px; margin-top:12px}
+  .savestate{font-size:12px; color:var(--muted)}
+
+  .row-item{display:flex; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid var(--line)}
+  .row-item:last-child{border-bottom:0}
+  .row-item .name{flex:1; font-size:14px}
+  .row-item .name small{display:block; color:var(--muted); font-size:12px}
+  .empty{text-align:center; color:var(--muted); font-size:14px; padding:30px 12px; border:1px dashed var(--line); border-radius:var(--r)}
+  .stat-row{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px}
+  .stat{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:14px 12px}
+  .stat .n{font-family:"Archivo"; font-weight:900; font-size:26px; letter-spacing:-.02em}
+  .stat .l{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-top:2px}
+  .barwrap{margin:10px 0}
+  .barwrap .lab{display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
+  .bar{height:10px; background:var(--panel-2); border-radius:2px; overflow:hidden; border:1px solid var(--line)}
+  .bar > i{display:block; height:100%; background:var(--blood-2)}
+  .flash{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--blood); color:#fff; padding:11px 20px; border-radius:8px; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; opacity:0; transition:opacity .2s; z-index:60}
+  .flash.show{opacity:1}
+  .load{text-align:center; padding:44px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; font-size:12px}
+  @media (max-width:520px){ .stat-row{grid-template-columns:repeat(2,1fr)} .authcard h1{font-size:36px} }
 </style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
-<div class="wrap" id="app"><div id="boot">Loading…</div></div>
 
+<div id="app"><div class="load">Loading</div></div>
+<div class="flash" id="flash"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-(function(){
-  "use strict";
-  var boot=document.getElementById("boot");
-  function fail(m){ if(boot) boot.textContent=m; }
+/* ============================================================
+   1. CONNECT TO SUPABASE
+   Replace the two values with yours from
+   Supabase → Project Settings → API.
+   ============================================================ */
+const SUPABASE_URL = "https://elrbabkftragomipkscw.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVscmJhYmtmdHJhZ29taXBrc2N3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1NTI2MDIsImV4cCI6MjEwMDEyODYwMn0.5eVqPzffwARIoR-C_tR15fFKjlVNgFjg34AxvX_CRSo";
 
-  var C={ bg:"#04141A",panel:"#0A2028",panel2:"#0E2A34",line:"#123845",ink:"#DCEEF0",muted:"#6E9AA0",
-    glow:"#3DE0C8",green:"#2FE6B0",greenSoft:"#0E3A38",amber:"#E8B65A",amberSoft:"#3A3018",
-    red:"#FF6B6B",redSoft:"#3A1C22",hrv:"#57C7FF",hrvBand:"rgba(87,199,255,0.14)",r7:"#2FE6B0",r30:"#8A7DFF",oura:"#2FE6B0",temp:"#E8B65A" };
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const CATS = ["Driving","Approach","Putting","Short Game","Performance","Technical","Practice"];
+const app = document.getElementById("app");
+let me = null;              // {id, full_name, role}
+let players = [];           // coach: their linked players
+let activePlayerId = null;  // whose day the grid is showing
+let activeDay = new Date().toISOString().slice(0,10);
+let drillMap = {};          // id -> drill
+let gridRows = [];          // working copy of the day's rows
 
-  // ==== YOUR RELAY ADDRESS ====
-  var WORKER_URL="https://shiny-wind-c11d.mattfitzpatrick1994.workers.dev/";
-  var GYM_URL="https://script.google.com/macros/s/AKfycbyIgdhH7JNT5N915Lj1UTbetvNieTz6JdcXV8vDygxwCY4hr5txxN7YDrxynEnzl-xp/exec";
+function flash(m){ const f=document.getElementById("flash"); f.textContent=m; f.classList.add("show"); setTimeout(()=>f.classList.remove("show"),1700); }
+function val(id){ return document.getElementById(id)?.value?.trim() || ""; }
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+function pillClass(c){ if(c==="Short Game")return "p-sg"; if(c==="Practice On Course")return "p-oncourse"; return "p-"+(c||"-"); }
 
-  var K_ROWS="readiness_360hp_rows_v1", K_OURA="readiness_oura_cache_v1", K_OURATIME="readiness_oura_time_v1";
-  var K_GYM="readiness_gym_cache_v1", K_GYMTIME="readiness_gym_time_v1", K_GYMSEL="readiness_gym_sel_v1";
-  var K_TOURN="readiness_tournament_v1", K_LOGHIST="readiness_loghist_v1", K_TRAVEL="readiness_travel_v1";
+/* ============================================================
+   2. AUTH
+   ============================================================ */
+function authScreen(mode){
+  const signup = mode==="signup";
+  app.innerHTML = `
+   <div class="auth"><div class="authcard">
+     <p class="kicker">Practice · logged · earned</p>
+     <h1>The <em>Work</em></h1>
+     <p class="sub">${signup?"Set up your account. Coaches build the plan, players put in the work — same sheet, one source of truth.":"Sign in and get after it."}</p>
+     <div id="autherr"></div>
+     ${signup?`<div class="field"><label>Your name</label><input id="a-name" placeholder="Matt Fitzpatrick"></div>`:""}
+     ${signup?`<div class="field"><label>I am a…</label><select id="a-role"><option value="player">Player</option><option value="coach">Coach</option></select></div>`:""}
+     <div class="field"><label>Email</label><input id="a-email" type="email" placeholder="you@email.com"></div>
+     <div class="field"><label>Password</label><input id="a-pass" type="password" placeholder="••••••••"></div>
+     <button class="btn btn-primary" id="a-go">${signup?"Create account":"Sign in"}</button>
+     <p class="switch">${signup?"Already have an account?":"New here?"}
+       <a href="#" id="a-switch">${signup?"Sign in":"Create one"}</a></p>
+   </div></div>`;
+  document.getElementById("a-switch").onclick=e=>{e.preventDefault(); authScreen(signup?"signin":"signup");};
+  document.getElementById("a-go").onclick=async()=>{
+    const errbox=document.getElementById("autherr"); errbox.innerHTML="";
+    try{
+      if(signup){
+        const {error}=await sb.auth.signUp({email:val("a-email"),password:val("a-pass"),
+          options:{data:{full_name:val("a-name"),role:val("a-role")}}});
+        if(error)throw error; flash("Account created");
+      }else{
+        const {error}=await sb.auth.signInWithPassword({email:val("a-email"),password:val("a-pass")});
+        if(error)throw error;
+      }
+    }catch(e){ errbox.innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+  };
+}
 
-  function get(k){try{return localStorage.getItem(k);}catch(e){return null;}}
-  function set(k,v){try{localStorage.setItem(k,v);}catch(e){}}
-  function getJSON(k,f){try{var s=localStorage.getItem(k);return s?JSON.parse(s):f;}catch(e){return f;}}
-  function setJSON(k,v){set(k,JSON.stringify(v));}
+/* ============================================================
+   3. BOOT
+   ============================================================ */
+async function boot(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){ authScreen("signin"); return; }
+  const {data:prof}=await sb.from("profiles").select("*").eq("id",session.user.id).single();
+  if(!prof){ app.innerHTML=`<div class="load">Setting up your profile — refresh in a moment</div>`; return; }
+  me=prof;
 
-  // ---------- helpers ----------
-  function parseCSV(t){var L=t.trim().split(/\r?\n/);var H=L[0].split(",").map(function(h){return h.trim();});
-    return L.slice(1).map(function(l){var p=l.split(",");var o={};H.forEach(function(h,i){o[h]=(p[i]!=null?p[i]:"").trim();});return o;});}
-  function pDate(s){var p=s.split("-").map(Number);return new Date(p[2],p[1]-1,p[0]);}       // DD-MM-YYYY (360HP)
-  function isoDate(d){return d.toISOString().slice(0,10);}                                    // YYYY-MM-DD
-  function fmt(d){return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short"});}
-  function median(a){if(!a.length)return null;var s=a.slice().sort(function(x,y){return x-y;});var m=Math.floor(s.length/2);return s.length%2?s[m]:(s[m-1]+s[m])/2;}
-  function mean(a){if(!a.length)return null;return a.reduce(function(x,y){return x+y;},0)/a.length;}
-  function stdev(a){if(a.length<2)return null;var m=mean(a);return Math.sqrt(mean(a.map(function(v){return (v-m)*(v-m);})));}
-  function pearson(xs,ys){var n=xs.length;if(n<4)return null;var mx=mean(xs),my=mean(ys),nu=0,dx=0,dy=0;
-    for(var i=0;i<n;i++){var a=xs[i]-mx,b=ys[i]-my;nu+=a*b;dx+=a*a;dy+=b*b;}if(!dx||!dy)return null;return nu/Math.sqrt(dx*dy);}
-  function r1(v){return v==null?null:Math.round(v*10)/10;}
+  // load drills into a lookup map
+  const {data:drills}=await sb.from("drills").select("*");
+  drillMap={}; (drills||[]).forEach(d=>drillMap[d.id]=d);
 
-  // ---------- data fusion ----------
-  // Build a per-day map keyed by YYYY-MM-DD merging 360HP rows + Oura cache.
-  function fuse(){
-    var rows360=getJSON(K_ROWS,null);
-    var oura=getJSON(K_OURA,null); // {readiness:[],daily_sleep:[],sleep_detail:{}}
-    var days={};
-
-    if(rows360){
-      rows360.forEach(function(r){
-        if(!r.date||!r.rMSSD) return;
-        var iso=isoDate(pDate(r.date));
-        days[iso]=days[iso]||{iso:iso};
-        days[iso].hp_hrv=parseFloat(r.rMSSD);
-        days[iso].hp_rhr=r.RHR?parseFloat(r.RHR):null;
-        days[iso].hp_subjective=r.subjective?parseFloat(r.subjective):null;
-        days[iso].hp_sleep=r.sleep?parseFloat(r.sleep):null;
-        days[iso].tags=(r.tags||"").trim(); days[iso].note=(r.note||"").trim();
-      });
-    }
-    if(oura){
-      (oura.readiness||[]).forEach(function(r){
-        var d=days[r.day]=days[r.day]||{iso:r.day};
-        d.o_readiness=r.score!=null?r.score:null;
-        d.o_tempdev=r.temperature_deviation!=null?r.temperature_deviation:null;
-        if(r.contributors){ d.o_hrvbal=r.contributors.hrv_balance; d.o_rhrcontrib=r.contributors.resting_heart_rate; }
-      });
-      (oura.daily_sleep||[]).forEach(function(r){
-        var d=days[r.day]=days[r.day]||{iso:r.day};
-        d.o_sleepscore=r.score!=null?r.score:null;
-      });
-      var det=oura.sleep_detail||{};
-      Object.keys(det).forEach(function(day){
-        var d=days[day]=days[day]||{iso:day};
-        d.o_hrv=det[day].average_hrv;          // raw ms — comparable to 360HP
-        d.o_rhr=det[day].lowest_heart_rate!=null?det[day].lowest_heart_rate:det[day].average_heart_rate;
-        d.o_sleephrs=det[day].total_sleep_hours;
-      });
-    }
-    // to sorted array
-    var arr=Object.keys(days).sort().map(function(k){return days[k];});
-    return arr;
+  if(me.role==="coach"){
+    const {data:links}=await sb.from("coach_players")
+      .select("player_id, profiles!coach_players_player_id_fkey(full_name)").eq("coach_id",me.id);
+    players=(links||[]).map(l=>({id:l.player_id,name:l.profiles?.full_name||"Player"}));
+    activePlayerId=players[0]?.id||null;
+  }else{
+    activePlayerId=me.id;
   }
+  shell();
+}
+sb.auth.onAuthStateChange(()=>boot());
 
-  // rolling-baseline signal engine with 360HP as HRV anchor + Oura fusion
-  function analyze(arr){
-    var W=7;
-    return arr.map(function(row,i){
-      var prior=arr.slice(Math.max(0,i-W),i);
+/* ============================================================
+   4. SHELL + TABS
+   ============================================================ */
+let currentTab=null;
+function shell(){
+  const tabs = me.role==="coach"
+    ? [["day","The Sheet"],["week","Week"],["players","Players"],["library","Drills"],["progress","Progress"]]
+    : [["day","The Sheet"],["week","Week"],["progress","Progress"]];
+  if(!currentTab) currentTab=tabs[0][0];
+  app.innerHTML=`
+    <header><div class="wrap">
+      <div class="mark"><div class="bar"></div><div class="brand">The <em>Work</em></div></div>
+      <div class="whoami">
+        <span class="rolechip">${me.role}</span>
+        <span>${esc(me.full_name||"")}</span>
+        <button class="signout" id="signout">Sign out</button>
+      </div>
+    </div></header>
+    <div class="wrap">
+      <nav class="tabs">${tabs.map(t=>`<button data-tab="${t[0]}" class="${t[0]===currentTab?'on':''}">${t[1]}</button>`).join("")}</nav>
+      <div id="tabview"></div>
+    </div>`;
+  document.getElementById("signout").onclick=()=>sb.auth.signOut();
+  app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{currentTab=b.dataset.tab; shell();});
+  renderTab();
+}
+function renderTab(){
+  const v=document.getElementById("tabview");
+  v.innerHTML=`<div class="load">Loading</div>`;
+  if(currentTab==="day") dayScreen(v);
+  else if(currentTab==="week") weekScreen(v);
+  else if(currentTab==="players") coachPlayers(v);
+  else if(currentTab==="library") library(v);
+  else if(currentTab==="progress") progress(v);
+}
 
-      // choose HRV anchor: prefer 360HP, fall back to Oura raw HRV
-      function hrvOf(d){ return d.hp_hrv!=null?d.hp_hrv:(d.o_hrv!=null?d.o_hrv:null); }
-      var hrv=hrvOf(row), hrvSrc=row.hp_hrv!=null?"360HP":(row.o_hrv!=null?"Oura":null);
-      var hp=prior.map(hrvOf).filter(function(v){return v!=null&&isFinite(v);});
-      var hBase=hp.length>=3?median(hp):null, hSd=hp.length>=3?stdev(hp):null;
-      var hDev=(hBase&&hrv!=null)?(hrv-hBase)/hBase:null;
-
-      // resting HR: prefer 360HP, else Oura
-      var rhr=row.hp_rhr!=null?row.hp_rhr:(row.o_rhr!=null?row.o_rhr:null);
-      var rhrSrc=row.hp_rhr!=null?"360HP":(row.o_rhr!=null?"Oura":null);
-      var rp=prior.map(function(d){return d.hp_rhr!=null?d.hp_rhr:d.o_rhr;}).filter(function(v){return v!=null&&isFinite(v);});
-      var rBase=rp.length>=3?median(rp):null;
-
-      // rolling avgs of HRV anchor
-      var w7=arr.slice(Math.max(0,i-6),i+1).map(hrvOf).filter(function(v){return v!=null&&isFinite(v);});
-      var w30=arr.slice(Math.max(0,i-29),i+1).map(hrvOf).filter(function(v){return v!=null&&isFinite(v);});
-      var roll7=w7.length>=3?mean(w7):null, roll30=w30.length>=5?mean(w30):null;
-
-      // ---- component sub-scores (-1 bad .. +1 good) ----
-      var reasons=[];
-      var parts=[], weights=[];
-
-      if(hDev!==null){
-        var hScore=Math.max(-1,Math.min(1,hDev/0.15));
-        parts.push(hScore); weights.push(0.45);
-        var pct=Math.round(hDev*100);
-        reasons.push({dir:hScore>0.15?"up":hScore<-0.15?"down":"flat",
-          txt:"HRV "+(pct>=0?"+":"")+pct+"% vs baseline"+(hrvSrc?" ("+hrvSrc+")":"")});
-      }
-      if(row.hp_subjective!=null){
-        var sScore=Math.max(-1,Math.min(1,(row.hp_subjective-7.5)/2));
-        parts.push(sScore); weights.push(0.28);
-        reasons.push({dir:sScore>0.2?"up":sScore<-0.2?"down":"flat", txt:"Subjective "+row.hp_subjective+"/10 (360HP)"});
-      }
-      if(rBase&&rhr!=null){
-        var rd=(rhr-rBase)/rBase; var rScore=Math.max(-1,Math.min(1,-rd/0.08));
-        parts.push(rScore); weights.push(0.12);
-        var rdiff=Math.round(rhr-rBase);
-        if(Math.abs(rdiff)>=2) reasons.push({dir:rScore>0?"up":"down", txt:"Resting HR "+(rdiff>0?"+":"")+rdiff+" bpm"+(rhrSrc?" ("+rhrSrc+")":"")});
-      }
-      if(row.o_readiness!=null){
-        var oScore=Math.max(-1,Math.min(1,(row.o_readiness-75)/15));
-        parts.push(oScore); weights.push(0.09);
-        reasons.push({dir:oScore>0.2?"up":oScore<-0.2?"down":"flat", txt:"Oura readiness "+row.o_readiness});
-      }
-      if(row.o_sleepscore!=null){
-        var slScore=Math.max(-1,Math.min(1,(row.o_sleepscore-75)/18));
-        parts.push(slScore); weights.push(0.06);
-        if(row.o_sleepscore<70||row.o_sleepscore>=88) reasons.push({dir:slScore>0?"up":"down", txt:"Oura sleep "+row.o_sleepscore});
-      }
-
-      // weighted composite
-      var wsum=weights.reduce(function(a,b){return a+b;},0)||1;
-      var comp=0; for(var k=0;k<parts.length;k++) comp+=parts[k]*weights[k]; comp/=wsum;
-
-      // ---- temperature warning (illness/stress early flag) ----
-      var tempFlag=false;
-      if(row.o_tempdev!=null && row.o_tempdev>=0.5){
-        tempFlag=true; comp=Math.min(comp,comp-0.25);
-        reasons.push({dir:"warn", txt:"Body temp +"+row.o_tempdev.toFixed(1)+"°C above normal — possible illness/stress"});
-      }
-
-      // ---- subjective override: a rough morning pulls toward caution on its own ----
-      if(row.hp_subjective!=null){
-        if(row.hp_subjective<=5){
-          comp=Math.min(comp,-0.35);
-          reasons.push({dir:"warn", txt:"Subjective "+row.hp_subjective+"/10 is low — capped toward recover regardless of other signals"});
-        } else if(row.hp_subjective<=6.5){
-          comp=Math.min(comp,-0.05);
-          reasons.push({dir:"warn", txt:"Subjective "+row.hp_subjective+"/10 is down — held to moderate at best today"});
-        }
-      }
-
-      // ---- tag override (pain/illness in 360HP notes) ----
-      var text=((row.tags||"")+" "+(row.note||"")).toLowerCase();
-      if(["pain","fatigue","ill","sick","injur","lock"].some(function(w){return text.indexOf(w)>=0;})){
-        comp=Math.min(comp,-0.5);
-        reasons.push({dir:"warn", txt:"Flagged in notes: "+(row.tags||row.note)});
-      }
-
-      // ---- agreement / disagreement between 360HP HRV and Oura readiness ----
-      var confidence="single source";
-      if(hDev!==null && row.o_readiness!=null){
-        var hpPos=hDev>0.03, hpNeg=hDev<-0.03;
-        var ouPos=row.o_readiness>=78, ouNeg=row.o_readiness<70;
-        if((hpPos&&ouPos)||(hpNeg&&ouNeg)) confidence="high — sources agree";
-        else if((hpPos&&ouNeg)||(hpNeg&&ouPos)){
-          confidence="mixed — sources disagree";
-          comp=comp>0?comp*0.5:comp*0.7; // pull toward neutral/caution on conflict
-          reasons.push({dir:"warn", txt:"360HP HRV and Oura disagree today — easing the call toward caution"});
-        } else confidence="moderate";
-      }
-
-      var band=comp>=0.15?"green":(comp>=-0.2?"yellow":"red");
-      var hasAnchor=(hBase!==null && hrv!=null);
-
-      // 0-100 readiness score: comp is -1..+1. Map so 50 = baseline/neutral,
-      // with a gentle curve so mid-range days aren't all bunched together.
-      var score100=Math.round(50 + 50*Math.max(-1,Math.min(1, comp*1.15)));
-
-      return Object.assign({},row,{hrv:hrv,hrvSrc:hrvSrc,hBase:hBase,hSd:hSd,hDev:hDev,
-        rhr:rhr,rBase:rBase,roll7:roll7,roll30:roll30,comp:comp,score100:score100,band:band,
-        reasons:reasons,confidence:confidence,tempFlag:tempFlag,has:hasAnchor});
-    });
+/* ============================================================
+   5. THE SHEET — shared day grid with lookup-on-select
+   ============================================================ */
+async function dayScreen(v){
+  if(me.role==="coach" && !players.length){
+    v.innerHTML=`<div class="empty">No players linked yet. Open <b>Players</b> to add one by email.</div>`;
+    return;
   }
+  const drills=Object.values(drillMap).sort((a,b)=>a.name.localeCompare(b.name));
+  const playerPicker = me.role==="coach"
+    ? `<div class="dsel"><span class="who">Player</span>
+        <select id="pcell" style="background:transparent;border:0;color:var(--ink);font-weight:700">
+          ${players.map(p=>`<option value="${p.id}" ${p.id===activePlayerId?'selected':''}>${esc(p.name)}</option>`).join("")}
+        </select></div>`
+    : `<div class="who">Your sheet, <b>${esc(me.full_name||"")}</b></div>`;
 
-  var VERD={ green:{w:"GREEN",h:"Push",b:"Body's ready. Good day for a hard session or heavy practice load."},
-    yellow:{w:"YELLOW",h:"Moderate",b:"Middle ground. Technical work, skills, or a moderate session — leave max effort for a green day."},
-    red:{w:"RED",h:"Recover",b:"Signals are down. Rest, mobility, or light recovery. Pushing today digs the hole deeper."} };
+  v.innerHTML=`
+    <div class="daybar">
+      <div class="dsel"><span class="who">Day</span><input type="date" id="daycell" value="${activeDay}"></div>
+      ${playerPicker}
+      <span class="who" style="margin-left:auto" id="rolehint">${me.role==="coach"?"Build the day — pick drills, the rest fills in":"Tick done · log actuals · add notes"}</span>
+    </div>
+    <div class="gridwrap">
+      <table class="grid">
+        <thead><tr>
+          <th class="l">Drill</th><th>Club(s)</th><th>Category</th><th>Time</th><th>Balls</th>
+          <th>Dist</th><th>Ment</th><th>Phys</th><th>Why</th><th>Goal</th>
+          <th>Done</th><th>Completed notes</th><th>Notes</th><th></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+        <tfoot><tr>
+          <td class="l">Totals</td><td></td><td></td>
+          <td id="t-time">0</td><td id="t-balls">0</td><td></td>
+          <td id="t-ment">0</td><td id="t-phys">0</td>
+          <td colspan="6"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    <div class="gridtools">
+      <button class="btn btn-ghost btn-sm" id="addrow">+ Add row</button>
+      <div class="savebar" style="margin-left:auto">
+        <span class="savestate" id="savestate"></span>
+        <button class="btn btn-primary btn-sm" id="savegrid">Save the day</button>
+      </div>
+    </div>`;
 
-  // ---------- Oura fetch ----------
-  function fetchOura(cb){
-    if(!WORKER_URL || WORKER_URL.indexOf("http")!==0){ cb({error:"No relay URL set"}); return; }
-    var ctrl=new AbortController(); var to=setTimeout(function(){ctrl.abort();},12000);
-    fetch(WORKER_URL,{signal:ctrl.signal}).then(function(r){return r.json();}).then(function(d){
-      clearTimeout(to);
-      if(d.error){ cb({error:d.error}); return; }
-      setJSON(K_OURA,{readiness:d.readiness||[],daily_sleep:d.daily_sleep||[],sleep_detail:d.sleep_detail||{}});
-      set(K_OURATIME,String(Date.now()));
-      cb({ok:true});
-    }).catch(function(e){ clearTimeout(to); cb({error:e.name==="AbortError"?"Timed out reaching Oura":e.message}); });
+  if(me.role==="coach"){
+    document.getElementById("pcell").onchange=e=>{ activePlayerId=e.target.value; dayScreen(v); };
   }
+  document.getElementById("daycell").onchange=e=>{ activeDay=e.target.value; dayScreen(v); };
+  document.getElementById("addrow").onclick=()=>{ gridRows.push(blankRow()); drawRows(drills); };
+  document.getElementById("savegrid").onclick=saveDay;
 
-  // ---------- gym (Google Sheets via Apps Script) ----------
-  function fetchGym(cb,_attempt){
-    if(!GYM_URL || GYM_URL.indexOf("http")!==0){ cb({error:"No gym URL set"}); return; }
-    var attempt=_attempt||1;
-    var ctrl=new AbortController(); var to=setTimeout(function(){ctrl.abort();},30000);
-    fetch(GYM_URL,{signal:ctrl.signal}).then(function(r){return r.json();}).then(function(d){
-      clearTimeout(to);
-      if(!d.ok){ cb({error:d.error||"Sheet returned an error"}); return; }
-      setJSON(K_GYM,{weeks:d.weeks||[],updated:d.updated||""});
-      set(K_GYMTIME,String(Date.now()));
-      cb({ok:true});
-    }).catch(function(e){ clearTimeout(to);
-      // Apps Script cold-start can time out the first hit — retry once automatically
-      if(attempt<2){ fetchGym(cb,attempt+1); return; }
-      cb({error:e.name==="AbortError"?"Timed out reaching the sheet (tried twice). Tap Sync again — the sheet may just be waking up.":e.message});
-    });
-  }
-  // POST logged sets. rows: [{week,day,date,exercise,v1,v2,v3,v4,done}]
-  function postGym(rows,cb){
-    if(!GYM_URL){ cb({error:"No gym URL set"}); return; }
-    var ctrl=new AbortController(); var to=setTimeout(function(){ctrl.abort();},30000);
-    // Apps Script web apps accept simple POST; text/plain avoids a CORS preflight
-    fetch(GYM_URL,{method:"POST",body:JSON.stringify({rows:rows}),headers:{"Content-Type":"text/plain;charset=utf-8"},signal:ctrl.signal})
-      .then(function(r){return r.json();}).then(function(d){
-        clearTimeout(to);
-        if(!d.ok){ cb({error:d.error||"Save failed"}); return; }
-        cb({ok:true,saved:d.saved});
-      }).catch(function(e){ clearTimeout(to); cb({error:e.name==="AbortError"?"Timed out saving \u2014 tap Log again, the sheet may be waking up":e.message}); });
-  }
+  await loadDay();
+  drawRows(drills);
+}
 
-  // ---------- chart helpers ----------
-  var CHARTS=[];
-  function destroyCharts(){CHARTS.forEach(function(c){try{c.destroy();}catch(e){}});CHARTS=[];}
-  function mkCanvas(p,h){var w=document.createElement("div");w.className="cwrap";w.style.height=h+"px";var cv=document.createElement("canvas");w.appendChild(cv);p.appendChild(w);return cv;}
-  function card(t,n){var d=document.createElement("div");d.className="card";var x=document.createElement("div");x.className="ctitle";x.textContent=t;d.appendChild(x);if(n){var y=document.createElement("div");y.className="cnote";y.textContent=n;d.appendChild(y);}return d;}
-  function baseOpts(extra){var o={responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:"index"},
-    plugins:{legend:{display:false},tooltip:{backgroundColor:C.panel2,borderColor:C.line,borderWidth:1,titleColor:C.muted,bodyColor:C.ink}},
-    scales:{x:{grid:{color:C.line,drawTicks:false},ticks:{color:C.muted,maxRotation:0,autoSkip:true,maxTicksLimit:6},border:{color:C.line}},
-            y:{grid:{color:C.line,drawTicks:false},ticks:{color:C.muted},border:{display:false}}}};
-    if(extra) deepMerge(o,extra); return o;}
-  function deepMerge(t,s){for(var k in s){if(s[k]&&typeof s[k]==="object"&&!Array.isArray(s[k])){t[k]=t[k]||{};deepMerge(t[k],s[k]);}else t[k]=s[k];}return t;}
-  function chartsReady(){return typeof window.Chart!=="undefined";}
-  function noChart(container){var c=document.createElement("div");c.className="card";c.style.color=C.muted;c.style.fontSize="13px";
-    c.textContent="Charts didn't load this time. Pull down to refresh.";container.appendChild(c);}
-  function needSync(container,msg){var d=document.createElement("div");d.className="needsync";d.textContent=msg;container.appendChild(d);}
-  function lineChart(container,title,note,labels,datasets,opts,h){var cd=card(title,note);var cv=mkCanvas(cd,h||220);container.appendChild(cd);
-    CHARTS.push(new Chart(cv,{type:"line",data:{labels:labels,datasets:datasets},options:baseOpts(opts||{})}));}
-  var LEG={plugins:{legend:{display:true,labels:{color:C.muted,boxWidth:12,usePointStyle:true}}}};
+function blankRow(){ return {id:null, drill_id:"", minutes:"", balls:"", distance:"", mental:"", physical:"",
+  completed:false, completed_notes:"", notes:"", _dirty:true}; }
 
-  // ---------- per-tab chart builders ----------
-  function buildTrends(container,model){
-    destroyCharts();
-    if(!chartsReady()){noChart(container);return;}
-    Chart.defaults.font.family="Inter, system-ui, sans-serif"; Chart.defaults.color=C.muted;
-    var rowsB=model.filter(function(d){return d.has;});
-    var labels=rowsB.map(function(d){return fmt(new Date(d.iso));});
-    if(rowsB.length<2){needSync(container,"Import your 360HP CSV (and sync Oura) to see trends here.");return;}
+async function loadDay(){
+  const {data}=await sb.from("sessions").select("*")
+    .eq("player_id",activePlayerId).eq("logged_on",activeDay).order("sort");
+  gridRows = (data||[]).map(r=>({
+    id:r.id, drill_id:r.drill_id||"", minutes:r.minutes??"", balls:r.balls??"",
+    distance:r.distance??"", mental:r.mental??"", physical:r.physical??"",
+    completed:!!r.completed, completed_notes:r.completed_notes||"", notes:r.notes||"", _dirty:false
+  }));
+  if(!gridRows.length) gridRows=[blankRow(),blankRow(),blankRow()];
+}
 
-    lineChart(container,"HRV vs your rolling baseline","Daily HRV (360HP where available, else Oura) against your 7-day baseline.",labels,[
-      {label:"HRV",data:rowsB.map(function(d){return r1(d.hrv);}),borderColor:C.hrv,borderWidth:2.4,pointRadius:0,tension:0.3},
-      {label:"baseline",data:rowsB.map(function(d){return r1(d.hBase);}),borderColor:C.muted,borderWidth:1,borderDash:[4,3],pointRadius:0,tension:0.3}
-    ],{},240);
+function drawRows(drills){
+  const tb=document.getElementById("rows"); if(!tb) return;
+  const isPlayer = me.role==="player";
+  tb.innerHTML="";
+  gridRows.forEach((r,i)=>{
+    const d = r.drill_id ? drillMap[r.drill_id] : null;
+    const cat = d?d.category:"";
+    const opts=`<option value=""></option>`+drills.map(x=>`<option value="${x.id}" ${x.id===r.drill_id?'selected':''}>${esc(x.name)}</option>`).join("");
+    const catCell = cat?`<span class="pill ${pillClass(cat)}">${esc(cat)}</span>`:`<span class="auto">—</span>`;
+    const doneCell = isPlayer
+      ? `<input type="checkbox" class="donebox" data-i="${i}" ${r.completed?'checked':''}>`
+      : `<span class="doneflag ${r.completed?'on':''}">${r.completed?'✓':'–'}</span>`;
+    const cnoteCell = isPlayer
+      ? `<input class="cell-txt" data-i="${i}" data-f="completed_notes" value="${esc(r.completed_notes)}" placeholder="how'd it go">`
+      : `<span class="auto" style="text-align:left; min-width:120px; display:block">${r.completed_notes?esc(r.completed_notes):'—'}</span>`;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td><select class="drillsel" data-i="${i}">${opts}</select></td>
+      <td><span class="auto">${d&&d.default_club?esc(d.default_club):'—'}</span></td>
+      <td style="text-align:center">${catCell}</td>
+      <td style="text-align:center"><input class="cell-in" data-i="${i}" data-f="minutes" value="${esc(r.minutes)}"></td>
+      <td style="text-align:center"><input class="cell-in" data-i="${i}" data-f="balls" value="${esc(r.balls)}"></td>
+      <td><span class="auto">${d&&d.distance?esc(d.distance):(r.distance?esc(r.distance):'—')}</span></td>
+      <td style="text-align:center"><input class="cell-in" data-i="${i}" data-f="mental" value="${esc(r.mental)}"></td>
+      <td style="text-align:center"><input class="cell-in" data-i="${i}" data-f="physical" value="${esc(r.physical)}"></td>
+      <td><span class="auto">${d&&d.why?esc(d.why):'—'}</span></td>
+      <td><span class="auto" style="text-align:left; display:block; min-width:110px">${d&&d.goal?esc(d.goal):'—'}</span></td>
+      <td style="text-align:center">${doneCell}</td>
+      <td>${cnoteCell}</td>
+      <td><input class="cell-txt" data-i="${i}" data-f="notes" value="${esc(r.notes)}" placeholder="notes"></td>
+      <td style="text-align:center"><button class="rowdel" data-i="${i}" title="Remove">×</button></td>`;
+    tb.appendChild(tr);
+  });
 
-    var up=rowsB.map(function(d){return (d.hBase!=null&&d.hSd!=null)?r1(d.hBase+d.hSd):null;});
-    var lo=rowsB.map(function(d){return (d.hBase!=null&&d.hSd!=null)?r1(d.hBase-d.hSd):null;});
-    lineChart(container,"HRV trend with variability band","Shaded band is your normal swing (\u00b11 SD). Breaking below it = a real dip, not noise.",labels,[
-      {label:"upper",data:up,borderColor:"transparent",backgroundColor:C.hrvBand,pointRadius:0,fill:"+1"},
-      {label:"lower",data:lo,borderColor:"transparent",backgroundColor:C.hrvBand,pointRadius:0,fill:false},
-      {label:"HRV",data:rowsB.map(function(d){return r1(d.hrv);}),borderColor:C.hrv,borderWidth:2.4,pointRadius:0,tension:0.3}
-    ],{},240);
-
-    lineChart(container,"Rolling 7-day vs 30-day HRV","When the fast line dips below the slow line, fatigue is building before you feel it.",labels,[
-      {label:"7-day",data:rowsB.map(function(d){return r1(d.roll7);}),borderColor:C.r7,borderWidth:2.4,pointRadius:0,tension:0.35},
-      {label:"30-day",data:rowsB.map(function(d){return r1(d.roll30);}),borderColor:C.r30,borderWidth:2.4,pointRadius:0,tension:0.35}
-    ],LEG);
-
-    // daily score bars
-    (function(){var cd=card("Daily readiness score","0\u2013100 from all sources fused. Green \u2265 59, amber 39\u201358, red < 39.");
-      var cv=mkCanvas(cd,200);container.appendChild(cd);
-      CHARTS.push(new Chart(cv,{type:"bar",data:{labels:labels,datasets:[
-        {label:"score",data:rowsB.map(function(d){return d.score100;}),backgroundColor:rowsB.map(function(d){return C[d.band];}),borderRadius:3}
-      ]},options:baseOpts({scales:{y:{min:0,max:100}}})}));})();
-
-    // resting HR trend
-    var hasRhr=rowsB.filter(function(d){return d.rhr!=null;}).length>=2;
-    if(hasRhr) lineChart(container,"Resting heart rate","Lower and stable is good; a jump often signals fatigue or illness coming on.",labels,[
-      {label:"resting HR",data:rowsB.map(function(d){return d.rhr;}),borderColor:C.red,borderWidth:2.2,pointRadius:0,tension:0.3},
-      {label:"baseline",data:rowsB.map(function(d){return r1(d.rBase);}),borderColor:C.muted,borderWidth:1,borderDash:[4,3],pointRadius:0,tension:0.3}
-    ],{});
-  }
-
-  function buildCompare(container,model){
-    destroyCharts();
-    if(!chartsReady()){noChart(container);return;}
-    var both=model.filter(function(d){return d.hp_hrv!=null&&d.o_hrv!=null;});
-    if(both.length<2){
-      needSync(container,"This tab compares your 360HP HRV against Oura's raw HRV side by side. It needs the updated Oura relay (v2) deployed so Oura's raw HRV comes through \u2014 once that's live and synced, these charts fill in.");
-      return;
+  // drill select => VLOOKUP fill
+  tb.querySelectorAll(".drillsel").forEach(s=>s.onchange=()=>{
+    const i=+s.dataset.i, id=s.value, d=drillMap[id];
+    const r=gridRows[i];
+    r.drill_id=id; r._dirty=true;
+    if(d){
+      if(r.minutes===""||r.minutes==null) r.minutes = d.default_minutes ?? "";
+      if(r.balls===""||r.balls==null)     r.balls   = d.default_balls ?? "";
+      if(r.mental===""||r.mental==null)   r.mental  = d.default_mental ?? "";
+      if(r.physical===""||r.physical==null) r.physical = d.default_physical ?? "";
+      if(!r.distance) r.distance = d.distance ?? "";
     }
-    var lbl=both.map(function(d){return fmt(new Date(d.iso));});
-    lineChart(container,"360HP vs Oura HRV","Both raw HRV (ms) on the same days. Close lines = your sources agree; gaps = they diverge.",lbl,[
-      {label:"360HP",data:both.map(function(d){return r1(d.hp_hrv);}),borderColor:C.hrv,borderWidth:2.4,pointRadius:2,tension:0.3},
-      {label:"Oura",data:both.map(function(d){return r1(d.o_hrv);}),borderColor:C.oura,borderWidth:2.4,pointRadius:2,tension:0.3}
-    ],LEG);
+    drawRows(drills); markDirty();
+  });
+  // editable cells
+  tb.querySelectorAll("input.cell-in, input.cell-txt").forEach(inp=>inp.oninput=()=>{
+    const i=+inp.dataset.i; gridRows[i][inp.dataset.f]=inp.value; gridRows[i]._dirty=true; totals(); markDirty();
+  });
+  tb.querySelectorAll(".donebox").forEach(b=>b.onchange=()=>{ const i=+b.dataset.i; gridRows[i].completed=b.checked; gridRows[i]._dirty=true; markDirty(); });
+  tb.querySelectorAll(".rowdel").forEach(btn=>btn.onclick=async()=>{
+    const i=+btn.dataset.i, row=gridRows[i];
+    if(row.id){ await sb.from("sessions").delete().eq("id",row.id); }
+    gridRows.splice(i,1); if(!gridRows.length)gridRows=[blankRow()]; drawRows(drills); totals();
+  });
+  totals();
+}
 
-    // difference bars
-    (function(){var cd=card("Daily difference (360HP \u2212 Oura)","How far apart your two HRV sources are each day. Bars near zero = strong agreement.");
-      var cv=mkCanvas(cd,200);container.appendChild(cd);
-      CHARTS.push(new Chart(cv,{type:"bar",data:{labels:lbl,datasets:[
-        {label:"diff (ms)",data:both.map(function(d){return r1(d.hp_hrv-d.o_hrv);}),backgroundColor:both.map(function(d){var x=Math.abs(d.hp_hrv-d.o_hrv);return x<8?C.green:x<18?C.amber:C.red;}),borderRadius:3}
-      ]},options:baseOpts()}));})();
+function totals(){
+  let tt=0,tb=0,tm=0,mc=0,tp=0;
+  gridRows.forEach(r=>{ tt+=+r.minutes||0; tb+=+r.balls||0; if(r.mental!==""&&r.mental!=null){tm+=+r.mental;mc++;} tp+=+r.physical||0; });
+  const set=(id,v)=>{const el=document.getElementById(id); if(el)el.textContent=v;};
+  set("t-time",Math.round(tt)); set("t-balls",Math.round(tb));
+  set("t-ment",mc?tm.toFixed(1):"0"); set("t-phys",tp.toFixed(1));
+}
+function markDirty(){ const s=document.getElementById("savestate"); if(s)s.textContent="Unsaved changes"; }
 
-    // scatter agreement
-    (function(){var cd=card("Agreement scatter","Each dot is a day. The tighter the dots hug a diagonal line, the more your two devices agree.");
-      var cv=mkCanvas(cd,240);container.appendChild(cd);
-      var pts=both.map(function(d){return {x:r1(d.o_hrv),y:r1(d.hp_hrv)};});
-      CHARTS.push(new Chart(cv,{type:"scatter",data:{datasets:[{label:"day",data:pts,backgroundColor:C.glow,pointRadius:4}]},
-        options:baseOpts({scales:{x:{title:{display:true,text:"Oura HRV",color:C.muted}},y:{title:{display:true,text:"360HP HRV",color:C.muted}}}})}));})();
-
-    var r=pearson(both.map(function(d){return d.o_hrv;}),both.map(function(d){return d.hp_hrv;}));
-    if(r!=null){var ins=document.createElement("div");ins.className="insight";
-      ins.innerHTML="<b>Correlation r = "+r.toFixed(2)+".</b> "+(Math.abs(r)>0.6?"Your two HRV sources track each other closely \u2014 they broadly agree.":Math.abs(r)>0.3?"Moderate agreement \u2014 they move together somewhat but diverge on individual days.":"Weak agreement \u2014 the two devices often tell different stories on a given day, which is exactly why the app leans cautious when they disagree.");
-      container.appendChild(ins);}
-  }
-
-  function buildOura(container,model){
-    destroyCharts();
-    if(!chartsReady()){noChart(container);return;}
-    var rowsB=model.filter(function(d){return d.has;});
-    var labels=rowsB.map(function(d){return fmt(new Date(d.iso));});
-    var withO=rowsB.filter(function(d){return d.o_readiness!=null||d.o_sleepscore!=null;});
-    if(withO.length<2){
-      needSync(container,"No Oura data yet. Tap \u201cSync Oura\u201d at the top \u2014 once it pulls, readiness, sleep, resting HR and body temperature appear here.");
-      return;
-    }
-    lineChart(container,"Oura readiness & body temperature","Readiness score with body-temperature deviation. A temp spike often precedes a bad stretch.",labels,[
-      {label:"readiness",data:rowsB.map(function(d){return d.o_readiness;}),borderColor:C.oura,borderWidth:2,pointRadius:0,tension:0.3,yAxisID:"y"},
-      {label:"temp \u0394\u00b0C",data:rowsB.map(function(d){return d.o_tempdev;}),borderColor:C.temp,borderWidth:2,pointRadius:0,tension:0.3,yAxisID:"y1"}
-    ],deepMerge({scales:{y:{min:40,max:100,position:"left"},y1:{position:"right",grid:{drawOnChartArea:false}}}},LEG),200);
-
-    var hasSleep=rowsB.filter(function(d){return d.o_sleepscore!=null;}).length>=2;
-    if(hasSleep) lineChart(container,"Oura sleep score","Your nightly sleep quality score from Oura.",labels,[
-      {label:"sleep",data:rowsB.map(function(d){return d.o_sleepscore;}),borderColor:C.r30,borderWidth:2.2,pointRadius:0,tension:0.3}
-    ],{scales:{y:{min:0,max:100}}});
-
-    // body temperature alone with danger line
-    var hasTemp=rowsB.filter(function(d){return d.o_tempdev!=null;}).length>=2;
-    if(hasTemp) lineChart(container,"Body temperature deviation","How far last night's temp sat from your normal. Above +0.5\u00b0C can signal illness or heavy stress.",labels,[
-      {label:"temp \u0394\u00b0C",data:rowsB.map(function(d){return d.o_tempdev;}),borderColor:C.temp,borderWidth:2.2,pointRadius:0,tension:0.3}
-    ],{});
-
-    // sleep hours if v2 present
-    var hasHrs=rowsB.filter(function(d){return d.o_sleephrs!=null;}).length>=2;
-    if(hasHrs){ lineChart(container,"Time asleep (hours)","Total sleep per night from Oura's detailed data.",labels,[
-      {label:"hours",data:rowsB.map(function(d){return d.o_sleephrs;}),borderColor:C.green,borderWidth:2.2,pointRadius:0,tension:0.3}
-    ],{}); }
-    else { needSync(container,"Sleep-stage and hours detail needs the updated Oura relay (v2). Once it's deployed and synced, this fills in."); }
-  }
-
-  function buildInsights(container,model){
-    destroyCharts();
-    if(!chartsReady()){noChart(container);return;}
-    var rowsB=model.filter(function(d){return d.has;});
-    if(rowsB.length<4){needSync(container,"Insights need a bit more history. Import your full 360HP CSV and sync Oura, then check back.");return;}
-
-    // sleep(360HP) vs HRV scatter + correlation
-    var pts=model.filter(function(d){return d.hp_sleep!=null&&d.hrv!=null;}).map(function(d){return {x:d.hp_sleep,y:r1(d.hrv)};});
-    if(pts.length>=4){
-      var r=pearson(pts.map(function(p){return p.x;}),pts.map(function(p){return p.y;}));
-      var cd=card("Does 360HP sleep predict your HRV?", r!=null?("Sleep score (x) vs HRV (y). r = "+r.toFixed(2)+"."):"Sleep vs HRV.");
-      var cv=mkCanvas(cd,240);container.appendChild(cd);
-      CHARTS.push(new Chart(cv,{type:"scatter",data:{datasets:[{label:"day",data:pts,backgroundColor:C.glow,pointRadius:4}]},
-        options:baseOpts({scales:{x:{min:0.5,max:4.5,ticks:{stepSize:1},title:{display:true,text:"sleep score",color:C.muted}},y:{title:{display:true,text:"HRV",color:C.muted}}}})}));
-    }
-
-    // Oura sleep vs next-day HRV correlation insight
-    var pairs=[];
-    for(var i=1;i<model.length;i++){ var prev=model[i-1],cur=model[i];
-      if(prev.o_sleepscore!=null&&cur.hrv!=null) pairs.push({x:prev.o_sleepscore,y:cur.hrv}); }
-    if(pairs.length>=4){
-      var r2=pearson(pairs.map(function(p){return p.x;}),pairs.map(function(p){return p.y;}));
-      var cd2=card("Last night's Oura sleep vs today's HRV", r2!=null?("Does a good night lift next-day HRV? r = "+r2.toFixed(2)+"."):"");
-      var cv2=mkCanvas(cd2,240);container.appendChild(cd2);
-      CHARTS.push(new Chart(cv2,{type:"scatter",data:{datasets:[{label:"day",data:pairs,backgroundColor:C.oura,pointRadius:4}]},
-        options:baseOpts({scales:{x:{title:{display:true,text:"prev-night sleep",color:C.muted}},y:{title:{display:true,text:"HRV",color:C.muted}}}})}));
-    }
-
-    // what predicts good vs bad days: compare avg metrics on green vs red days
-    var greens=model.filter(function(d){return d.band==="green";});
-    var reds=model.filter(function(d){return d.band==="red";});
-    function avg(list,key){var v=list.map(function(d){return d[key];}).filter(function(x){return x!=null&&isFinite(x);});return v.length?mean(v):null;}
-    if(greens.length>=2&&reds.length>=2){
-      var ins=document.createElement("div");ins.className="insight";
-      var gSleep=avg(greens,"hp_sleep"),rSleep=avg(reds,"hp_sleep");
-      var gRhr=avg(greens,"rhr"),rRhr=avg(reds,"rhr");
-      var gSubj=avg(greens,"hp_subjective"),rSubj=avg(reds,"hp_subjective");
-      var lines=["<b>What your good vs bad days look like</b> ("+greens.length+" green, "+reds.length+" red so far):"];
-      if(gSubj!=null&&rSubj!=null) lines.push("\u2022 Subjective: "+gSubj.toFixed(1)+" on green days vs "+rSubj.toFixed(1)+" on red");
-      if(gRhr!=null&&rRhr!=null) lines.push("\u2022 Resting HR: "+Math.round(gRhr)+" on green vs "+Math.round(rRhr)+" on red");
-      if(gSleep!=null&&rSleep!=null) lines.push("\u2022 Sleep score: "+gSleep.toFixed(1)+" on green vs "+rSleep.toFixed(1)+" on red");
-      ins.innerHTML=lines.join("<br>");
-      container.appendChild(ins);
-    }
-
-    // weekly summary: last 7 days band counts + trend
-    var last7=rowsB.slice(-7);
-    if(last7.length>=3){
-      var g=last7.filter(function(d){return d.band==="green";}).length;
-      var y=last7.filter(function(d){return d.band==="yellow";}).length;
-      var rd=last7.filter(function(d){return d.band==="red";}).length;
-      var wc=card("This week","Your last "+last7.length+" days at a glance.");
-      var row=document.createElement("div");row.className="weekrow";
-      row.innerHTML="<span>Signal mix</span><span>"+
-        '<span class="chip" style="background:'+C.green+'"></span>'.repeat(g)+
-        '<span class="chip" style="background:'+C.amber+'"></span>'.repeat(y)+
-        '<span class="chip" style="background:'+C.red+'"></span>'.repeat(rd)+
-        "</span>";
-      wc.appendChild(row);
-      var r7now=last7[last7.length-1].roll7, r30now=last7[last7.length-1].roll30;
-      if(r7now!=null&&r30now!=null){var tr=document.createElement("div");tr.className="weekrow";
-        tr.innerHTML="<span>Fatigue trend</span><span style='color:"+(r7now>=r30now?C.green:C.amber)+"'>"+(r7now>=r30now?"absorbing load well":"load building \u2014 watch it")+"</span>";
-        wc.appendChild(tr);}
-      container.appendChild(wc);
-    }
-
-    // ---- Training load vs recovery (from locally-logged sessions) ----
-    var loghist=getJSON(K_LOGHIST,[]);
-    if(loghist.length>=2 && chartsReady()){
-      // aggregate weekly training volume by ISO date -> sum of top weights that day
-      var byDate={};
-      loghist.forEach(function(l){ if(!l.date) return; byDate[l.date]=(byDate[l.date]||0)+(l.topWeight||0); });
-      var dates=Object.keys(byDate).sort();
-      if(dates.length>=2){
-        // align HRV roll7 to those dates from model
-        var hrvByDate={}; model.forEach(function(d){ if(d.roll7!=null) hrvByDate[d.iso]=r1(d.roll7); });
-        var cd=card("Training load vs recovery","Bars = training load that day (sum of top set weights). Line = your 7-day HRV trend. When load climbs while the line falls, you're outrunning recovery.");
-        var cv=mkCanvas(cd,230);container.appendChild(cd);
-        var lbl=dates.map(function(x){return fmt(new Date(x));});
-        CHARTS.push(new Chart(cv,{type:"bar",data:{labels:lbl,datasets:[
-          {type:"bar",label:"load (kg)",data:dates.map(function(x){return Math.round(byDate[x]);}),backgroundColor:C.amber+"88",borderRadius:3,yAxisID:"y"},
-          {type:"line",label:"HRV 7-day",data:dates.map(function(x){return hrvByDate[x]!=null?hrvByDate[x]:null;}),borderColor:C.hrv,borderWidth:2.4,pointRadius:0,tension:0.3,spanGaps:true,yAxisID:"y1"}
-        ]},options:baseOpts(deepMerge({scales:{y:{position:"left",title:{display:true,text:"load",color:C.muted}},y1:{position:"right",grid:{drawOnChartArea:false},title:{display:true,text:"HRV",color:C.muted}}}},LEG))}));
-      }
-    } else if(chartsReady()){
-      needSync(container,"Training load vs recovery will chart here once you've logged a few gym sessions in the Training tab. It overlays your training volume against your HRV trend to spot when load is outrunning recovery.");
-    }
-
-    // ---- VBT: bar velocity trend at load ----
-    var velLogs=loghist.filter(function(l){return l.avgVel!=null&&l.topWeight!=null;});
-    if(velLogs.length>=2 && chartsReady()){
-      // group by exercise, show the most-logged one
-      var byEx={}; velLogs.forEach(function(l){ (byEx[l.exercise]=byEx[l.exercise]||[]).push(l); });
-      var topEx=Object.keys(byEx).sort(function(a,b){return byEx[b].length-byEx[a].length;})[0];
-      var series=byEx[topEx].slice().sort(function(a,b){return (a.date<b.date?-1:1);});
-      if(series.length>=2){
-        var cd2=card("Bar speed trend \u2014 "+topEx,"Average bar velocity (m/s) over time for your most-logged lift. A drop in speed at similar loads is an early fatigue signal, often before HRV moves.");
-        var cv2=mkCanvas(cd2,220);container.appendChild(cd2);
-        var lbl2=series.map(function(l){return fmt(new Date(l.date));});
-        CHARTS.push(new Chart(cv2,{type:"line",data:{labels:lbl2,datasets:[
-          {label:"avg velocity",data:series.map(function(l){return r1(l.avgVel);}),borderColor:C.glow,borderWidth:2.6,pointRadius:3,tension:0.3},
-          {label:"top weight",data:series.map(function(l){return l.topWeight;}),borderColor:C.muted,borderWidth:1,borderDash:[4,3],pointRadius:0,tension:0.3,yAxisID:"y1"}
-        ]},options:baseOpts(deepMerge({scales:{y:{position:"left",title:{display:true,text:"m/s",color:C.muted}},y1:{position:"right",grid:{drawOnChartArea:false},title:{display:true,text:"kg",color:C.muted}}}},LEG))}));
-      }
-    } else if(chartsReady()){
-      needSync(container,"Bar-speed trends appear here once you've logged velocity for a lift a few times. Tracking bar speed at a given load is elite-level fatigue monitoring \u2014 a speed drop flags fatigue early.");
-    }
-  }
-  var histOpen=null; // iso of expanded day
-  function buildHistory(container,model){
-    var rowsB=model.filter(function(d){return d.has;});
-    if(rowsB.length<1){needSync(container,"No history yet. Import your 360HP CSV (and sync Oura) and your daily scores will build up here.");return;}
-
-    var intro=document.createElement("div");intro.className="cnote";intro.style.margin="0 0 12px";
-    intro.textContent="Every day you have data for, newest first. Tap a day to see the full breakdown of why it scored what it did.";
-    container.appendChild(intro);
-
-    // newest first
-    var list=rowsB.slice().reverse();
-    list.forEach(function(d){
-      var bc=C[d.band];
-      var row=document.createElement("div");row.className="histrow";row.style.borderColor=bc+"44";
-      var dateStr=new Date(d.iso).toLocaleDateString("en-GB",{weekday:"short",day:"2-digit",month:"short"});
-      var meta=[];
-      if(d.hrv!=null) meta.push("HRV "+d.hrv.toFixed(0)+(d.hrvSrc?" ("+d.hrvSrc+")":""));
-      if(d.hp_subjective!=null) meta.push("subj "+d.hp_subjective);
-      if(d.o_readiness!=null) meta.push("Oura "+d.o_readiness);
-      row.innerHTML='<div class="histscore" style="color:'+bc+'">'+d.score100+'</div>'+
-        '<div class="histmid"><div class="histdate">'+dateStr+'</div>'+
-        '<div class="histword" style="color:'+bc+'">'+VERD[d.band].w+' \u00b7 '+VERD[d.band].h+'</div>'+
-        '<div class="histmeta">'+meta.join("  \u00b7  ")+'</div></div>'+
-        '<div style="color:'+C.muted+';font-size:20px">'+(histOpen===d.iso?"\u2013":"+")+'</div>';
-      row.onclick=function(){ histOpen=(histOpen===d.iso?null:d.iso); render(false); };
-      container.appendChild(row);
-
-      if(histOpen===d.iso){
-        var exp=document.createElement("div");exp.className="histexp";
-        if(d.reasons&&d.reasons.length){
-          d.reasons.forEach(function(r){
-            var cls=r.dir==="up"?"rup":r.dir==="down"?"rdown":r.dir==="warn"?"rwarn":"rflat";
-            var ico=r.dir==="up"?"\u25b2":r.dir==="down"?"\u25bc":r.dir==="warn"?"\u26a0":"\u2022";
-            var line=document.createElement("div");line.className="rline";
-            line.innerHTML='<span class="rico '+cls+'">'+ico+'</span><span>'+r.txt+'</span>';
-            exp.appendChild(line);
-          });
-        } else { var e=document.createElement("div");e.className="rline";e.textContent="No detailed breakdown for this day.";exp.appendChild(e); }
-        // extra numbers row
-        var extra=document.createElement("div");extra.className="histmeta";extra.style.marginTop="8px";
-        var bits=[];
-        if(d.rhr!=null) bits.push("Resting HR "+d.rhr);
-        if(d.o_sleepscore!=null) bits.push("Oura sleep "+d.o_sleepscore);
-        if(d.o_tempdev!=null) bits.push("Temp \u0394 "+(d.o_tempdev>0?"+":"")+d.o_tempdev.toFixed(2)+"\u00b0C");
-        if(d.confidence) bits.push("confidence: "+d.confidence);
-        extra.textContent=bits.join("  \u00b7  ");
-        exp.appendChild(extra);
-        container.appendChild(exp);
-      }
-    });
-
-    // quick stats footer
-    var scores=rowsB.map(function(d){return d.score100;});
-    var g=rowsB.filter(function(d){return d.band==="green";}).length;
-    var y=rowsB.filter(function(d){return d.band==="yellow";}).length;
-    var rr=rowsB.filter(function(d){return d.band==="red";}).length;
-    var sum=document.createElement("div");sum.className="insight";sum.style.marginTop="6px";
-    sum.innerHTML="<b>"+rowsB.length+" days tracked.</b> Average score "+Math.round(mean(scores))+"/100 \u00b7 "+
-      "<span style='color:"+C.green+"'>"+g+" green</span>, <span style='color:"+C.amber+"'>"+y+" amber</span>, <span style='color:"+C.red+"'>"+rr+" red</span>.";
-    container.appendChild(sum);
-  }
-
-  // ---------- Training tab (gym sheet) ----------
-  var gymStatus={state:"idle",msg:""};
-  function buildTraining(container,model){
-    var gym=getJSON(K_GYM,null);
-    var today=model.length?model[model.length-1]:null;
-
-    // status + sync
-    var bar=document.createElement("div");bar.className="sync";
-    var gt=get(K_GYMTIME);var gwhen=gt?new Date(parseInt(gt,10)):null;
-    var gdot=gymStatus.state==="err"?"doterr":(gym?"dotlive":"dotoff");
-    var gmsg=gymStatus.state==="loading"?"Loading your programme\u2026":gymStatus.state==="err"?("Sheet issue: "+gymStatus.msg):gym?("Programme loaded"+(gwhen?" \u00b7 "+gwhen.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"")):"Not loaded yet";
-    bar.innerHTML='<span class="'+gdot+'"></span><span>'+gmsg+'</span>';
-    var rb=document.createElement("button");rb.className="btn btn-ghost";rb.style.marginLeft="auto";rb.style.padding="6px 12px";rb.textContent="Sync programme";
-    rb.onclick=function(){gymStatus={state:"loading",msg:""};render(false);fetchGym(function(res){gymStatus=res.ok?{state:"ok",msg:""}:{state:"err",msg:res.error||"failed"};render(false);});};
-    bar.appendChild(rb);container.appendChild(bar);
-
-    if(!gym){
-      needSync(container,"Tap \u201cSync programme\u201d to pull your training plan from your Google Sheet. It loads your weeks and days so you can browse and log sessions here.");
-      // combined readiness line even without gym
-      if(today&&today.has){var ins=document.createElement("div");ins.className="insight";
-        ins.innerHTML="<b>Today's readiness: "+today.score100+"/100 ("+VERD[today.band].h+").</b> Sync your programme to see it beside today's session.";
-        container.appendChild(ins);}
-      return;
-    }
-
-    var weeks=gym.weeks||[];
-    if(!weeks.length){needSync(container,"Your sheet loaded but no programme weeks were found. Check the sheet has the usual Date/Day layout.");return;}
-
-    // combined readiness banner
-    if(today&&today.has){
-      var bc=C[today.band];
-      var rd=document.createElement("div");rd.className="insight";rd.style.borderColor=bc+"55";
-      rd.innerHTML="<b style='color:"+bc+"'>Readiness "+today.score100+"/100 \u2014 "+VERD[today.band].h+".</b> "+VERD[today.band].b+" You decide how to apply it to today's session below.";
-      container.appendChild(rd);
-    }
-
-    // week/day selectors (persist selection)
-    var sel=getJSON(K_GYMSEL,{w:0,d:0});
-    if(sel.w>=weeks.length) sel.w=0;
-    var wk=weeks[sel.w]; var days=wk.days||[];
-    if(sel.d>=days.length) sel.d=0;
-
-    var selCard=document.createElement("div");selCard.className="card";
-    selCard.innerHTML='<div class="ctitle">Browse programme</div>';
-    // week dropdown
-    var wsel=document.createElement("select");wsel.style.cssText="width:100%;padding:11px 12px;border-radius:8px;border:1px solid "+C.line+";background:"+C.panel2+";color:"+C.ink+";font-size:15px;margin:8px 0;";
-    weeks.forEach(function(w,i){var o=document.createElement("option");o.value=i;o.textContent=w.name;if(i===sel.w)o.selected=true;wsel.appendChild(o);});
-    wsel.onchange=function(){sel.w=parseInt(wsel.value,10);sel.d=0;setJSON(K_GYMSEL,sel);render(false);};
-    selCard.appendChild(wsel);
-    // day dropdown
-    var dsel=document.createElement("select");dsel.style.cssText=wsel.style.cssText;
-    days.forEach(function(dd,i){var o=document.createElement("option");o.value=i;o.textContent=(dd.label||("Day "+(i+1)))+(dd.date?"  ("+dd.date+")":"");if(i===sel.d)o.selected=true;dsel.appendChild(o);});
-    dsel.onchange=function(){sel.d=parseInt(dsel.value,10);setJSON(K_GYMSEL,sel);render(false);};
-    selCard.appendChild(dsel);
-    container.appendChild(selCard);
-
-    // the chosen day's exercises, each loggable
-    var day=days[sel.d];
-    if(!day){needSync(container,"No day selected.");return;}
-    var isWarmup=/warm/i.test(wk.name||"")||/warm/i.test(day.label||"");
-    var logInputs=[]; // {exercise, inputs:[4], doneEl}
-    (day.exercises||[]).forEach(function(ex){
-      var c=document.createElement("div");c.className="card";
-
-      // Warm-up movements: simple checklist — name, reps/instruction, and a tick. No weight/velocity.
-      if(isWarmup){
-        var repTxt=ex.reps||ex.sets||"";
-        c.innerHTML='<div style="font-weight:700;font-size:15px;color:'+C.ink+'">'+ex.name+'</div>'+
-          (repTxt?'<div class="cnote" style="margin:3px 0 0">'+repTxt+'</div>':'');
-        var wWrap=document.createElement("div");wWrap.style.cssText="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer;";
-        var wBox=document.createElement("div");wBox.className="chkbox";
-        var wState={on:false};
-        var wLbl=document.createElement("span");wLbl.style.cssText="font-size:13px;font-weight:600;color:"+C.muted+";";wLbl.textContent="Done";
-        function wpaint(){ wBox.className="chkbox"+(wState.on?" on":""); wLbl.textContent=wState.on?"Done \u2713":"Done"; wLbl.style.color=wState.on?C.green:C.muted; }
-        wWrap.onclick=function(){ wState.on=!wState.on; wpaint(); };
-        wpaint();
-        wWrap.appendChild(wBox);wWrap.appendChild(wLbl);
-        c.appendChild(wWrap);
-        container.appendChild(c);
-        return; // no logging inputs for warm-up movements
-      }
-
-      var meta=[];
-      if(ex.sets) meta.push(ex.sets+" sets"); if(ex.reps) meta.push(ex.reps+" reps");
-      c.innerHTML='<div style="font-weight:700;font-size:15px;color:'+C.ink+'">'+ex.name+'</div>'+
-        (meta.length?'<div class="cnote" style="margin:3px 0 6px">'+meta.join(" \u00b7 ")+'</div>':'')+
-        (ex.notes?'<div class="cnote" style="margin:0 0 8px">'+ex.notes+'</div>':'')+
-        (ex.last?'<div class="ssrc" style="color:'+C.muted+';margin-bottom:8px">Last time: '+ex.last+'</div>':'');
-      // 4 sets, each with a weight input and a velocity input beneath it
-      var grid=document.createElement("div");grid.style.cssText="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;";
-      var inputs=[]; var vels=[];
-      var inpCss="padding:9px 6px;border-radius:8px;border:1px solid "+C.line+";background:"+C.panel2+";color:"+C.ink+";font-size:15px;text-align:center;width:100%;";
-      for(var s=0;s<4;s++){
-        var col=document.createElement("div");col.style.cssText="display:flex;flex-direction:column;gap:5px;";
-        var slab=document.createElement("div");slab.style.cssText="font-size:10px;color:"+C.muted+";text-align:center;letter-spacing:0.04em;";slab.textContent="Set "+(s+1);
-        var inp=document.createElement("input");inp.type="text";inp.inputMode="decimal";inp.placeholder="kg";
-        inp.value=(ex.vals&&ex.vals[s])?ex.vals[s]:"";inp.style.cssText=inpCss;
-        var vel=document.createElement("input");vel.type="text";vel.inputMode="decimal";vel.placeholder="m/s";
-        vel.style.cssText=inpCss+"border-color:"+C.glow+"44;";
-        col.appendChild(slab);col.appendChild(inp);col.appendChild(vel);
-        grid.appendChild(col);inputs.push(inp);vels.push(vel);
-      }
-      c.appendChild(grid);
-      var vhint=document.createElement("div");vhint.className="ssrc";vhint.style.cssText="color:"+C.muted+";margin-top:6px;";vhint.textContent="Top row = weight (kg) \u00b7 bottom row = bar velocity (m/s)";
-      c.appendChild(vhint);
-
-      // Done checkbox
-      var doneWrap=document.createElement("div");doneWrap.style.cssText="display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer;";
-      var box=document.createElement("div");box.className="chkbox";
-      var doneState={on:false};
-      var lbl=document.createElement("span");lbl.style.cssText="font-size:14px;font-weight:600;color:"+C.muted+";";lbl.textContent="Mark completed";
-      function paint(){ box.className="chkbox"+(doneState.on?" on":""); lbl.textContent=doneState.on?"Completed":"Mark completed"; lbl.style.color=doneState.on?C.green:C.muted; }
-      doneWrap.onclick=function(){ doneState.on=!doneState.on; paint(); };
-      paint();
-      doneWrap.appendChild(box);doneWrap.appendChild(lbl);
-      c.appendChild(doneWrap);
-
-      logInputs.push({exercise:ex.name,inputs:inputs,vels:vels,done:doneState});
-      container.appendChild(c);
-    });
-
-    // save button -> POST to sheet
-    // save button -> POST to sheet (not shown for warm-ups; they're just a checklist)
-    if(isWarmup){
-      var wnote=document.createElement("div");wnote.className="cnote";wnote.style.cssText="margin-top:6px;text-align:center;";
-      wnote.textContent="Warm-up checklist \u2014 tick movements as you go. Nothing to log here.";
-      container.appendChild(wnote);
-      return;
-    }
-    var saveWrap=document.createElement("div");saveWrap.className="btnrow";
-    var saveBtn=document.createElement("button");saveBtn.className="btn btn-primary";
-    saveBtn.textContent=gymStatus.state==="saving"?"Saving\u2026":"Log this session";
-    saveBtn.onclick=function(){
-      var rows=logInputs.map(function(li){
-        return {week:wk.name,day:day.label,date:day.date,exercise:li.exercise,
-          v1:li.inputs[0].value,v2:li.inputs[1].value,v3:li.inputs[2].value,v4:li.inputs[3].value,
-          vel1:li.vels[0].value,vel2:li.vels[1].value,vel3:li.vels[2].value,vel4:li.vels[3].value,
-          done:li.done.on};
-      }).filter(function(r){return r.v1||r.v2||r.v3||r.v4||r.vel1||r.vel2||r.vel3||r.vel4||r.done;});
-      if(!rows.length){alert("Enter set values or tick an exercise as completed before logging.");return;}
-      gymStatus={state:"saving",msg:""};render(false);
-      postGym(rows,function(res){
-        if(res.ok){
-          gymStatus={state:"ok",msg:""};
-          // cache logged session locally so load & velocity trends can be charted
-          var hist=getJSON(K_LOGHIST,[]);
-          var logDate=day.date||new Date().toISOString().slice(0,10);
-          rows.forEach(function(r){
-            // volume = sum of (weight values entered); a simple load proxy per exercise
-            var weights=[r.v1,r.v2,r.v3,r.v4].map(function(x){return parseFloat(x)||0;});
-            var vols=weights.filter(function(x){return x>0;});
-            var vel=[r.vel1,r.vel2,r.vel3,r.vel4].map(function(x){return parseFloat(x)||0;}).filter(function(x){return x>0;});
-            hist.push({date:logDate,week:r.week,day:r.day,exercise:r.exercise,
-              weights:weights, avgVel: vel.length?(vel.reduce(function(a,b){return a+b;},0)/vel.length):null,
-              topWeight: vols.length?Math.max.apply(null,vols):null, ts:Date.now()});
-          });
-          // keep it from growing unbounded — last ~400 exercise-logs
-          if(hist.length>400) hist=hist.slice(hist.length-400);
-          setJSON(K_LOGHIST,hist);
-          alert("Logged "+res.saved+" exercise"+(res.saved===1?"":"s")+" to your sheet \u2705");
-        }
-        else{gymStatus={state:"err",msg:res.error};alert("Couldn't save: "+res.error);}
-        render(false);
-      });
+async function saveDay(){
+  const s=document.getElementById("savestate"); if(s)s.textContent="Saving…";
+  let ok=true;
+  for(let i=0;i<gridRows.length;i++){
+    const r=gridRows[i];
+    if(!r.drill_id && r.minutes==="" && r.balls==="" && !r.notes) continue; // skip empty rows
+    const payload={
+      player_id:activePlayerId, created_by:me.id, drill_id:r.drill_id||null,
+      logged_on:activeDay, sort:i,
+      minutes:num(r.minutes), balls:int(r.balls), distance:r.distance||null,
+      mental:num(r.mental), physical:num(r.physical),
+      completed:!!r.completed, completed_notes:r.completed_notes||null, notes:r.notes||null
     };
-    saveWrap.appendChild(saveBtn);container.appendChild(saveWrap);
+    let res;
+    if(r.id){ res=await sb.from("sessions").update(payload).eq("id",r.id); }
+    else{ res=await sb.from("sessions").insert(payload).select("id").single(); if(res.data)r.id=res.data.id; }
+    if(res.error){ ok=false; flash("Error: "+res.error.message); break; }
+    r._dirty=false;
   }
+  if(s)s.textContent=ok?"Saved":"Save failed";
+  if(ok)flash("Day saved");
+}
+function num(x){ return x===""||x==null?null:(+x); }
+function int(x){ return x===""||x==null?0:Math.round(+x); }
 
-  // ---------- app render ----------
-  var app=document.getElementById("app");
-  var ouraStatus={state:"idle",msg:""};
-  var TAB="today";
-  var TABSCROLL=0;
-  var PREVTAB=null;
-  var TABS=[["today","Today"],["history","History"],["training","Training"],["trends","Trends"],["compare","Compare"],["oura","Oura"],["insights","Insights"]];
+/* ============================================================
+   5b. THE WEEK — horizontal Mon–Sun overview + category summary
+   ============================================================ */
+function mondayOf(dateStr){
+  const d=new Date(dateStr+"T00:00:00");
+  const day=(d.getDay()+6)%7; // 0=Mon
+  d.setDate(d.getDate()-day);
+  return d;
+}
+function fmtDay(d){ return d.toLocaleDateString(undefined,{weekday:'short'}); }
+function fmtDate(d){ return d.toLocaleDateString(undefined,{day:'numeric',month:'short'}); }
+function isoDate(d){ return d.toISOString().slice(0,10); }
 
-  function render(savedFlash){
-    var keepScroll=(typeof window!=="undefined"&&window.pageYOffset)?window.pageYOffset:0;
-    var arr=fuse();
-    var model=arr.length?analyze(arr):[];
-    var today=model.length?model[model.length-1]:null;
-    app.innerHTML="";
+let weekStart = isoDate(mondayOf(new Date().toISOString().slice(0,10)));
 
-    var head=document.createElement("div");head.className="head";
-    head.innerHTML='<div><div class="title">Readiness</div><div class="sub">Fused HRV signal \u2014 360HP + Oura</div></div>'+
-      (today?'<div class="latest">Latest reading<br><b class="mono">'+today.iso+'</b></div>':'');
-    app.appendChild(head);
-
-    var fileInput=document.createElement("input");fileInput.type="file";fileInput.accept=".csv";fileInput.style.display="none";
-    fileInput.addEventListener("change",function(ev){var f=ev.target.files&&ev.target.files[0];if(!f)return;
-      var rd=new FileReader();rd.onload=function(x){try{var p=parseCSV(x.target.result);
-        if(!p.length||!("rMSSD" in p[0])){alert("That file doesn't look like a 360HP export \u2014 no rMSSD column found.");return;}
-        setJSON(K_ROWS,p);render(true);}catch(e){alert("Couldn't read that file. Make sure it's the raw 360HP CSV export.");}};
-      rd.readAsText(f);});
-    app.appendChild(fileInput);
-
-    if(savedFlash){var sv=document.createElement("div");sv.className="saved";sv.textContent="Saved to this device.";app.appendChild(sv);
-      setTimeout(function(){if(sv.parentNode)sv.parentNode.removeChild(sv);},2200);}
-
-    // sync status bar
-    var sync=document.createElement("div");sync.className="sync";
-    var tt=get(K_OURATIME); var when=tt?new Date(parseInt(tt,10)):null;
-    var dotClass=ouraStatus.state==="ok"||getJSON(K_OURA,null)?"dotlive":(ouraStatus.state==="err"?"doterr":"dotoff");
-    var syncMsg;
-    if(ouraStatus.state==="loading") syncMsg="Syncing with Oura\u2026";
-    else if(ouraStatus.state==="err") syncMsg="Oura sync issue: "+ouraStatus.msg;
-    else if(getJSON(K_OURA,null)) syncMsg="Oura connected"+(when?" \u00b7 updated "+when.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"");
-    else syncMsg="Oura not synced yet";
-    sync.innerHTML='<span class="'+dotClass+'"></span><span>'+syncMsg+'</span>';
-    var refresh=document.createElement("button");refresh.className="btn btn-ghost";refresh.style.marginLeft="auto";refresh.style.padding="6px 12px";refresh.textContent="Sync Oura";
-    refresh.onclick=function(){ ouraStatus={state:"loading",msg:""}; render(false);
-      fetchOura(function(res){ ouraStatus=res.ok?{state:"ok",msg:""}:{state:"err",msg:res.error||"failed"}; render(false); }); };
-    sync.appendChild(refresh);
-    app.appendChild(sync);
-
-    // no data yet -> onboarding, no tabs
-    if(!today || !today.has){
-      var p=document.createElement("div");p.className="panel";
-      p.innerHTML='<div class="ctitle">Get started</div>'+
-        '<p class="cnote" style="font-size:14px">Two sources feed your signal. <span class="tag tag-360">360HP</span> is your HRV anchor \u2014 import its CSV. <span class="tag tag-oura">Oura</span> pulls automatically to add readiness, sleep, resting HR and body temperature.</p>';
-      var b=document.createElement("button");b.className="btn btn-primary";b.style.padding="12px 20px";b.style.fontSize="15px";b.textContent="Import 360HP CSV";b.onclick=function(){fileInput.click();};
-      p.appendChild(b);
-      var b3=document.createElement("button");b3.className="btn btn-ghost";b3.style.marginLeft="10px";b3.style.padding="12px 20px";b3.textContent="Sync Oura now";
-      b3.onclick=function(){ouraStatus={state:"loading",msg:""};render(false);fetchOura(function(res){ouraStatus=res.ok?{state:"ok",msg:""}:{state:"err",msg:res.error||"failed"};render(false);});};
-      p.appendChild(b3);
-      app.appendChild(p);
-      var foot0=document.createElement("div");foot0.className="foot";
-      foot0.textContent="Signal, not diagnosis. This fuses trends across your own data to suggest how hard to go \u2014 it doesn't replace how you actually feel or medical advice.";
-      app.appendChild(foot0);
-      return;
-    }
-
-    // tab bar
-    var tabbar=document.createElement("div");tabbar.className="tabbar";
-    var activeBtn=null;
-    TABS.forEach(function(t){var b=document.createElement("button");b.className="tabbtn"+(TAB===t[0]?" active":"");b.textContent=t[1];
-      if(TAB===t[0]) activeBtn=b;
-      b.onclick=function(){ TABSCROLL=tabbar.scrollLeft; TAB=t[0]; render(false); };tabbar.appendChild(b);});
-    app.appendChild(tabbar);
-    // restore the horizontal scroll from before the re-render, then nudge the active tab into view
-    tabbar.scrollLeft=TABSCROLL;
-    if(activeBtn&&activeBtn.scrollIntoView){ try{ activeBtn.scrollIntoView({inline:"center",block:"nearest"}); }catch(e){} }
-
-    var body=document.createElement("div");app.appendChild(body);
-
-    if(TAB==="today"){
-      var bc=C[today.band], bs=C[today.band+"Soft"];
-      var v=document.createElement("div");v.className="verdict";
-      v.style.background=bs;v.style.border="1px solid "+bc+"55";v.style.boxShadow="0 0 40px -12px "+bc+"66";
-      var confColor = today.confidence.indexOf("high")>=0?C.green:today.confidence.indexOf("mixed")>=0?C.amber:C.muted;
-      // trend basis line — makes clear the score is relative to your rolling baseline, not one day
-      var trendBits=[];
-      if(today.hDev!=null){ var pct=Math.round(today.hDev*100);
-        trendBits.push("HRV "+(pct>=0?"+":"")+pct+"% vs your 7-day baseline"); }
-      if(today.roll7!=null&&today.roll30!=null){
-        var dir=today.roll7>=today.roll30; trendBits.push("<span style='color:"+(dir?C.green:C.amber)+"'>"+(dir?"\u25b2 trend climbing":"\u25bc trend sliding")+"</span>"); }
-      var trendLine=trendBits.length?'<div style="font-size:12.5px;color:'+C.muted+';margin-top:10px;font-weight:600">'+trendBits.join("  \u00b7  ")+'</div>':'';
-      // tournament mode reshapes the guidance toward freshness
-      var tournOn=get(K_TOURN)==="1";
-      var travelOn=get(K_TRAVEL)==="1";
-      var bodyText=VERD[today.band].b;
-      if(tournOn){
-        if(today.band==="green") bodyText="Tournament week: you're fresh. Keep it that way \u2014 sharpen, don't grind. Save the tank for the course.";
-        else if(today.band==="yellow") bodyText="Tournament week: middling readiness. Light and sharp only \u2014 prioritise being fresh over getting work in.";
-        else bodyText="Tournament week and signals are down. Rest and recover hard \u2014 arriving fresh matters more than any session right now.";
-      }
-      v.innerHTML='<div class="vtop">'+
-        '<div class="bigscore" style="color:'+bc+';text-shadow:0 0 30px '+bc+'66">'+today.score100+'<span class="scoreout">/100</span></div>'+
-        '<div class="scoreside"><div class="vword" style="color:'+bc+'">'+VERD[today.band].w+'</div><div class="vhead">'+(tournOn?"\ud83c\udfcc\ufe0f "+VERD[today.band].h:VERD[today.band].h)+'</div></div>'+
-        '</div>'+
-        trendLine+
-        (travelOn?'<div style="font-size:12px;color:'+C.amber+';margin-top:8px;font-weight:600">\u2708\ufe0f Travel flagged \u2014 a dip today is likely jet lag, not a red flag; don\'t over-read it.</div>':'')+
-        '<p class="vbody">'+bodyText+'</p>'+
-        '<span class="conf" style="background:'+confColor+'22;color:'+confColor+'">Confidence: '+today.confidence+'</span>';
-      body.appendChild(v);
-
-      // Tournament + travel toggles
-      var tog=document.createElement("div");tog.className="btnrow";
-      var tb=document.createElement("button");tb.className="btn "+(tournOn?"btn-primary":"btn-ghost");
-      tb.textContent=(tournOn?"\ud83c\udfcc\ufe0f Tournament mode: ON":"Tournament mode");
-      tb.onclick=function(){ set(K_TOURN,tournOn?"0":"1"); render(false); };
-      var vb=document.createElement("button");vb.className="btn "+(travelOn?"btn-primary":"btn-ghost");
-      vb.textContent=(travelOn?"\u2708\ufe0f Travel day: ON":"Travel day");
-      vb.onclick=function(){ set(K_TRAVEL,travelOn?"0":"1"); render(false); };
-      tog.appendChild(tb);tog.appendChild(vb);body.appendChild(tog);
-
-      var rc=document.createElement("div");rc.className="reason";rc.innerHTML='<h3>Why this signal</h3>';
-      if(today.reasons.length){ today.reasons.forEach(function(r){
-        var cls=r.dir==="up"?"rup":r.dir==="down"?"rdown":r.dir==="warn"?"rwarn":"rflat";
-        var ico=r.dir==="up"?"\u25b2":r.dir==="down"?"\u25bc":r.dir==="warn"?"\u26a0":"\u2022";
-        var line=document.createElement("div");line.className="rline";
-        line.innerHTML='<span class="rico '+cls+'">'+ico+'</span><span>'+r.txt+'</span>';rc.appendChild(line);});
-      } else { var e=document.createElement("div");e.className="rline";e.textContent="Not enough context yet to explain \u2014 add more history.";rc.appendChild(e); }
-      body.appendChild(rc);
-
-      var st=document.createElement("div");st.className="stats";
-      function stat(l,val,sub,src,col){return '<div class="stat"><div class="slabel">'+l+'</div><div class="svalue" style="color:'+(col||C.ink)+'">'+val+'</div>'+(sub?'<div class="ssub">'+sub+'</div>':'')+(src?'<div class="ssrc">'+src+'</div>':'')+'</div>';}
-      st.innerHTML=stat("HRV",today.hrv!=null?today.hrv.toFixed(1):"\u2014",today.hBase?("base "+today.hBase.toFixed(0)):"",today.hrvSrc||"",C.hrv)+
-        stat("Resting HR",today.rhr!=null?today.rhr:"\u2014",today.rBase?("base "+today.rBase.toFixed(0)):"",today.hrvSrc==="360HP"&&today.hp_rhr!=null?"360HP":(today.o_rhr!=null?"Oura":""))+
-        stat("Subjective",today.hp_subjective!=null?today.hp_subjective:"\u2014","/ 10",today.hp_subjective!=null?"360HP":"")+
-        stat("Oura readiness",today.o_readiness!=null?today.o_readiness:"\u2014","/ 100",today.o_readiness!=null?"Oura":"")+
-        stat("Oura sleep",today.o_sleepscore!=null?today.o_sleepscore:"\u2014","/ 100",today.o_sleepscore!=null?"Oura":"")+
-        stat("Readiness","<span style='color:"+bc+"'>"+today.score100+"</span>","/ 100","",bc);
-      body.appendChild(st);
-
-      var btns=document.createElement("div");btns.className="btnrow";
-      var b1=document.createElement("button");b1.className="btn btn-primary";b1.textContent="Update 360HP CSV";b1.onclick=function(){fileInput.click();};
-      var b2=document.createElement("button");b2.className="btn btn-ghost";b2.textContent="Clear all data";b2.onclick=function(){if(confirm("Clear 360HP history and Oura cache from this device?")){localStorage.removeItem(K_ROWS);localStorage.removeItem(K_OURA);localStorage.removeItem(K_OURATIME);render(false);}};
-      btns.appendChild(b1);btns.appendChild(b2);body.appendChild(btns);
-    }
-    else if(TAB==="trends") buildTrends(body,model);
-    else if(TAB==="compare") buildCompare(body,model);
-    else if(TAB==="history") buildHistory(body,model);
-    else if(TAB==="training") buildTraining(body,model);
-    else if(TAB==="oura") buildOura(body,model);
-    else if(TAB==="insights") buildInsights(body,model);
-
-    var foot=document.createElement("div");foot.className="foot";
-    foot.textContent="Signal, not diagnosis. This fuses trends across your own data to suggest how hard to go \u2014 it doesn't replace how you actually feel or medical advice. When your two sources disagree, it tells you and leans cautious.";
-    app.appendChild(foot);
-    // Scroll behaviour: jump to top only when the tab actually changes.
-    // For in-tab re-renders (expanding a history day, dropdowns, toggles) keep position.
-    if(typeof window!=="undefined"&&window.scrollTo){
-      if(PREVTAB!==TAB){ window.scrollTo(0,0); }
-      else { window.scrollTo(0,keepScroll); }
-    }
-    PREVTAB=TAB;
+async function weekScreen(v){
+  if(me.role==="coach" && !players.length){
+    v.innerHTML=`<div class="empty">No players linked yet. Open <b>Players</b> to add one.</div>`; return;
   }
+  const pid = me.role==="coach" ? (activePlayerId||players[0]?.id) : me.id;
+  const mon = mondayOf(weekStart);
+  const days=[...Array(7)].map((_,i)=>{ const d=new Date(mon); d.setDate(d.getDate()+i); return d; });
+  const from=isoDate(days[0]), to=isoDate(days[6]);
 
-  // initial render, then auto-sync Oura once on load if we have a URL
-  try{
-    render(false);
-    if(WORKER_URL && WORKER_URL.indexOf("http")===0){
-      ouraStatus={state:"loading",msg:""};
-      // reflect loading state without full re-render flash: only if today exists
-      fetchOura(function(res){ ouraStatus=res.ok?{state:"ok",msg:""}:{state:"err",msg:res.error||"failed"}; render(false); });
-    }
-  }catch(err){ fail("Something went wrong starting the app: "+err.message); }
-})();
+  const playerPicker = me.role==="coach"
+    ? `<select id="wpick" style="background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 10px;font-weight:700">${players.map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${esc(p.name)}</option>`).join("")}</select>`
+    : `<span class="who">Your week, <b>${esc(me.full_name||"")}</b></span>`;
+
+  v.innerHTML=`
+    <div class="daybar">
+      <button class="btn btn-ghost btn-sm" id="wprev">‹ Prev</button>
+      <div class="who" style="font-weight:700; color:var(--ink)">${fmtDate(days[0])} – ${fmtDate(days[6])}</div>
+      <button class="btn btn-ghost btn-sm" id="wnext">Next ›</button>
+      <button class="btn btn-ghost btn-sm" id="wthis">This week</button>
+      <span style="margin-left:auto">${playerPicker}</span>
+    </div>
+    <div id="weekbody"><div class="load">Loading the week</div></div>`;
+
+  document.getElementById("wprev").onclick=()=>{ const d=mondayOf(weekStart); d.setDate(d.getDate()-7); weekStart=isoDate(d); weekScreen(v); };
+  document.getElementById("wnext").onclick=()=>{ const d=mondayOf(weekStart); d.setDate(d.getDate()+7); weekStart=isoDate(d); weekScreen(v); };
+  document.getElementById("wthis").onclick=()=>{ weekStart=isoDate(mondayOf(new Date().toISOString().slice(0,10))); weekScreen(v); };
+  if(me.role==="coach"){ document.getElementById("wpick").onchange=e=>{ activePlayerId=e.target.value; weekScreen(v); }; }
+
+  // pull the whole week in one query
+  const {data:sess}=await sb.from("sessions").select("*, drills(name,category)")
+    .eq("player_id",pid).gte("logged_on",from).lte("logged_on",to).order("sort");
+  const rowsByDay={}; days.forEach(d=>rowsByDay[isoDate(d)]=[]);
+  (sess||[]).forEach(s=>{ (rowsByDay[s.logged_on]=rowsByDay[s.logged_on]||[]).push(s); });
+
+  // ----- horizontal week board: one column per day -----
+  const catP=c=>`<span class="pill ${pillClass(c)}" style="font-size:9px; padding:2px 6px">${esc(c||'')}</span>`;
+  let cols="";
+  days.forEach(d=>{
+    const key=isoDate(d), list=rowsByDay[key]||[];
+    const mins=list.reduce((a,s)=>a+(+s.minutes||0),0);
+    const balls=list.reduce((a,s)=>a+(s.balls||0),0);
+    const done=list.filter(s=>s.completed).length;
+    const isToday = key===new Date().toISOString().slice(0,10);
+    cols+=`
+      <div style="min-width:150px; flex:1; border:1px solid var(--line); border-radius:var(--r); background:var(--panel); overflow:hidden">
+        <div style="padding:8px 10px; background:${isToday?'var(--blood)':'var(--panel-2)'}; color:${isToday?'#fff':'var(--ink)'}">
+          <div style="font-weight:800; text-transform:uppercase; font-size:12px; letter-spacing:.04em">${fmtDay(d)}</div>
+          <div style="font-size:11px; opacity:.8">${fmtDate(d)}</div>
+        </div>
+        <div style="padding:8px; display:flex; flex-direction:column; gap:6px; min-height:60px">
+          ${list.length? list.map(s=>`
+            <div style="border:1px solid var(--line); border-radius:7px; padding:6px 7px; background:var(--panel-2)">
+              <div style="display:flex; align-items:center; gap:5px; justify-content:space-between">
+                ${catP(s.drills?.category)}
+                <span class="doneflag ${s.completed?'on':''}" style="font-size:12px">${s.completed?'✓':'·'}</span>
+              </div>
+              <div style="font-size:12px; margin-top:3px; line-height:1.25">${esc(s.drills?.name||'—')}</div>
+              <div style="font-size:10px; color:var(--muted); margin-top:2px">${s.minutes||0}m · ${s.balls||0}b</div>
+            </div>`).join("")
+            : `<div style="color:var(--faint); font-size:11px; text-align:center; padding:14px 4px">—</div>` }
+        </div>
+        <div style="padding:7px 10px; border-top:1px solid var(--line); font-size:11px; color:var(--muted); display:flex; justify-content:space-between">
+          <span>${mins}m · ${balls}b</span><span>${done}/${list.length} ✓</span>
+        </div>
+      </div>`;
+  });
+
+  // ----- weekly category summary -----
+  const byCat={}; CATS.forEach(c=>byCat[c]={mins:0,balls:0,count:0,done:0});
+  let totMins=0,totBalls=0,totCount=0,totDone=0;
+  (sess||[]).forEach(s=>{
+    const c=s.drills?.category||"Technical"; if(!byCat[c])byCat[c]={mins:0,balls:0,count:0,done:0};
+    byCat[c].mins+=+s.minutes||0; byCat[c].balls+=s.balls||0; byCat[c].count++; if(s.completed)byCat[c].done++;
+    totMins+=+s.minutes||0; totBalls+=s.balls||0; totCount++; if(s.completed)totDone++;
+  });
+  const maxMins=Math.max(1,...CATS.map(c=>byCat[c].mins));
+  const summaryRows=CATS.filter(c=>byCat[c].count>0).map(c=>`
+    <div class="barwrap">
+      <div class="lab"><span>${c}</span><span>${byCat[c].count} drills · ${byCat[c].mins}m · ${byCat[c].balls}b</span></div>
+      <div class="bar"><i style="width:${Math.round(byCat[c].mins/maxMins*100)}%; background:var(--blood-2)"></i></div>
+    </div>`).join("") || `<div class="empty">Nothing planned this week yet.</div>`;
+
+  document.getElementById("weekbody").innerHTML=`
+    <div style="overflow-x:auto; padding-bottom:4px">
+      <div style="display:flex; gap:10px; min-width:900px">${cols}</div>
+    </div>
+    <div class="stat-row" style="margin-top:18px">
+      ${stat(totCount,"Drills")}${stat(totMins,"Minutes")}${stat(totBalls,"Balls")}${stat(totCount?Math.round(totDone/totCount*100)+'%':'0%',"Completed")}
+    </div>
+    <div class="card">
+      <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:14px">Category summary · this week</h3>
+      ${summaryRows}
+    </div>`;
+}
+
+/* ============================================================
+   6. COACH — PLAYERS
+   ============================================================ */
+async function coachPlayers(v){
+  v.innerHTML=`
+    <div class="card">
+      <h3 style="font-size:15px; text-transform:uppercase; letter-spacing:.02em; margin-bottom:10px">Add a player</h3>
+      <p style="font-size:12px; color:var(--muted); margin:0 0 12px">They sign up first (as a Player), then you link the email they used.</p>
+      <div class="inline"><input id="pemail" placeholder="player@email.com" style="flex:1"><button class="btn btn-primary btn-sm" id="addp">Link</button></div>
+    </div>
+    <div class="sec-h"><h2>Your players</h2></div>
+    <div class="card" id="plist"><div class="load">Loading</div></div>`;
+  document.getElementById("addp").onclick=async()=>{
+    const email=val("pemail").toLowerCase();
+    const {data:found}=await sb.rpc("find_profile_by_email",{e:email});
+    if(!found){ flash("No player with that email"); return; }
+    const {error}=await sb.from("coach_players").insert({coach_id:me.id,player_id:found});
+    if(error){ flash(error.message.includes("duplicate")?"Already linked":error.message); return; }
+    flash("Player linked"); document.getElementById("pemail").value=""; boot();
+  };
+  const box=document.getElementById("plist");
+  if(!players.length){ box.innerHTML=`<div class="empty">No players linked yet.</div>`; return; }
+  box.innerHTML=players.map(p=>`<div class="row-item"><div class="name">${esc(p.name)}</div></div>`).join("");
+}
+
+/* ============================================================
+   7. DRILL LIBRARY — full lookup fields
+   ============================================================ */
+async function library(v){
+  v.innerHTML=`
+    <div class="card">
+      <h3 style="font-size:15px; text-transform:uppercase; letter-spacing:.02em; margin-bottom:12px">Add a drill</h3>
+      <div class="field"><label class="mini">Name</label><input id="ln" placeholder="Iron Session 125-175"></div>
+      <div class="grid2" style="margin-top:8px">
+        <div><label class="mini">Category</label><select id="lc">${CATS.map(c=>`<option>${c}</option>`).join("")}</select></div>
+        <div><label class="mini">Default club(s)</label><input id="lk" placeholder="52/W/9/8/7"></div>
+      </div>
+      <div class="grid3" style="margin-top:8px">
+        <div><label class="mini">Def. time</label><input id="lt" type="number" placeholder="20"></div>
+        <div><label class="mini">Def. balls</label><input id="lb" type="number" placeholder="10"></div>
+        <div><label class="mini">Distance</label><input id="ld" placeholder="125-175"></div>
+      </div>
+      <div class="grid3" style="margin-top:8px">
+        <div><label class="mini">Def. mental</label><input id="lm" type="number" step="0.5" placeholder="6"></div>
+        <div><label class="mini">Def. phys</label><input id="lp" type="number" step="0.5" placeholder="4.5"></div>
+        <div><label class="mini">Why</label><input id="lw" placeholder="Performance"></div>
+      </div>
+      <div class="field" style="margin-top:8px"><label class="mini">Goal / pass criteria</label><input id="lg" placeholder="70% or more inside 5%"></div>
+      <button class="btn btn-primary btn-sm" id="ladd" style="margin-top:12px; width:100%">Add to library</button>
+    </div>
+    <div class="sec-h"><h2>Library</h2><span class="meta" id="lcount"></span></div>
+    <div class="card" id="llist"><div class="load">Loading</div></div>`;
+  document.getElementById("ladd").onclick=async()=>{
+    if(!val("ln")){ flash("Name the drill"); return; }
+    const {error}=await sb.from("drills").insert({
+      owner_id:me.id, name:val("ln"), category:val("lc"), default_club:val("lk"),
+      default_minutes:num(val("lt")), default_balls:num(val("lb")), distance:val("ld"),
+      default_mental:num(val("lm")), default_physical:num(val("lp")), why:val("lw"), goal:val("lg")});
+    if(error){ flash(error.message); return; }
+    flash("Drill added"); const {data:drills}=await sb.from("drills").select("*"); drillMap={}; (drills||[]).forEach(d=>drillMap[d.id]=d);
+    ["ln","lk","lt","lb","ld","lm","lp","lw","lg"].forEach(i=>document.getElementById(i).value=""); loadLib();
+  };
+  loadLib();
+  async function loadLib(){
+    const {data}=await sb.from("drills").select("*").order("category").order("name");
+    const box=document.getElementById("llist"); document.getElementById("lcount").textContent=(data?.length||0)+" drills";
+    if(!data?.length){ box.innerHTML=`<div class="empty">No drills yet — add your first above.</div>`; return; }
+    box.innerHTML=data.map(d=>`
+      <div class="row-item">
+        <span class="pill ${pillClass(d.category)}">${esc(d.category)}</span>
+        <div class="name">${esc(d.name)}<small>${[d.default_club,d.distance,d.goal].filter(Boolean).map(esc).join(" · ")||"—"}</small></div>
+        <span class="meta">${d.default_minutes||0}m · ${d.default_balls||0}b</span>
+      </div>`).join("");
+  }
+}
+
+/* ============================================================
+   8. PROGRESS — category balance, last 7 days
+   ============================================================ */
+async function progress(v){
+  const pid = me.role==="coach" ? (activePlayerId||players[0]?.id) : me.id;
+  if(!pid){ v.innerHTML=`<div class="empty">Link a player first.</div>`; return; }
+  const weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+  const {data}=await sb.from("sessions").select("*, drills(category)").eq("player_id",pid).gte("logged_on",weekAgo);
+  const byCat={}; CATS.forEach(c=>byCat[c]=0);
+  let balls=0,mins=0; const days=new Set();
+  (data||[]).forEach(s=>{ const c=s.drills?.category||"Technical"; byCat[c]=(byCat[c]||0)+(s.balls||0); balls+=s.balls||0; mins+=+s.minutes||0; days.add(s.logged_on); });
+  const max=Math.max(1,...Object.values(byCat));
+  const picker = me.role==="coach" && players.length
+    ? `<select id="ppick" style="background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 10px;font-weight:700">${players.map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${esc(p.name)}</option>`).join("")}</select>`
+    : "";
+  v.innerHTML=`
+    <div class="sec-h"><h2>Last 7 days</h2>${picker}</div>
+    <div class="stat-row">
+      ${stat(data?.length||0,"Sessions")}${stat(Math.round(mins),"Minutes")}${stat(balls,"Balls")}${stat(days.size,"Days on")}
+    </div>
+    <div class="card">
+      <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:14px">Balls by category</h3>
+      ${CATS.map(c=>`<div class="barwrap"><div class="lab"><span>${c}</span><span>${byCat[c]}</span></div><div class="bar"><i style="width:${Math.round(byCat[c]/max*100)}%"></i></div></div>`).join("")}
+    </div>
+    ${!data?.length?'<div class="empty" style="margin-top:14px">No sessions logged in the last 7 days.</div>':''}`;
+  if(me.role==="coach" && players.length){ document.getElementById("ppick").onchange=e=>{ activePlayerId=e.target.value; progress(v); }; }
+}
+function stat(n,l){ return `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`; }
+
+boot();
 </script>
 </body>
 </html>

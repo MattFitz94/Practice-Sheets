@@ -163,7 +163,7 @@
   .flash.show{opacity:1}
   .load{text-align:center; padding:44px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; font-size:12px}
   .seasonmob{display:none}
-  .sfil.on{background:var(--blood-2); color:var(--lime-ink); border-color:var(--blood-2)}
+  .sfil.on,.cwin.on{background:var(--blood-2); color:var(--lime-ink); border-color:var(--blood-2)}
 
   @media (max-width:520px){
     .stat-row{grid-template-columns:repeat(2,1fr)}
@@ -1363,6 +1363,7 @@ function sgColor(v){ if(v==null) return "var(--muted)"; return v>=0.5?"#6fd8ab":
 function sgFmt(v){ return v==null?"—":((v>0?"+":"")+Number(v).toFixed(2)); }
 
 let resultsView = "list";
+let corrWindow = 8;
 
 async function resultsScreen(v){
   const pid = me.role==="player" ? me.id : activePlayerId;
@@ -1615,7 +1616,7 @@ async function showResult(r,pid){
 /* ---- view: practice vs performance ---- */
 async function renderCorrelation(box,results,pid){
   box.innerHTML=`<div class="load">Working out the correlation</div>`;
-  const recent=results.slice(0,8).filter(r=>r.start_date);
+  const recent=results.slice(0,corrWindow).filter(r=>r.start_date);
   if(!recent.length){ box.innerHTML=`<div class="empty">Not enough results yet.</div>`; return; }
   const from=recent[recent.length-1].start_date;
   const {data:sess}=await sb.from("sessions").select("balls, minutes, drills(category)")
@@ -1641,6 +1642,10 @@ async function renderCorrelation(box,results,pid){
   const mostPractised=rows.slice().sort((a,b)=>b.balls-a.balls)[0];
 
   box.innerHTML=`
+    <div class="daybar" style="margin-bottom:10px">
+      <span class="who">Window</span>
+      ${[4,8,12,20].map(w=>`<button class="btn btn-ghost btn-sm cwin ${w===corrWindow?"on":""}" data-w="${w}">${w} events</button>`).join("")}
+    </div>
     <p style="font-size:12px; color:var(--muted); margin:0 0 12px">
       Practice logged since ${from} against average strokes gained over your last ${recent.length} events.</p>
     <div class="card">
@@ -1665,6 +1670,10 @@ async function renderCorrelation(box,results,pid){
         Most practice volume went to <b style="color:var(--ink)">${mostPractised.cat}</b> (${mostPractised.balls} balls).
         ${worst.balls < mostPractised.balls/2 ? `Your weakest area has had roughly ${Math.round(worst.balls/Math.max(mostPractised.balls,1)*100)}% of the volume your most-practised one has.` : ""}
       </div></div>`:""}`;
+
+  box.querySelectorAll(".cwin").forEach(b=>b.onclick=()=>{
+    corrWindow=+b.dataset.w; renderCorrelation(box,results,pid);
+  });
 }
 
 /* ============================================================

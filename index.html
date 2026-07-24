@@ -1394,10 +1394,14 @@ async function dgSetup(settings,v){
     <div class="clist" style="padding:14px 16px">
       <div class="field"><label class="mini">API key</label>
         <input id="dg-key" value="${esc(settings?.dg_key||"")}" placeholder="paste your key"></div>
-      <div class="field"><label class="mini">Your name (as Data Golf lists it)</label>
-        <input id="dg-name" value="${esc(settings?.dg_name||me.full_name||"")}" placeholder="Fitzpatrick, Matt"></div>
-      ${settings?.dg_id?`<div style="font-size:12px; color:var(--muted)">Matched to Data Golf ID <b style="color:var(--blood-2)">${settings.dg_id}</b></div>`:
-        `<div style="font-size:12px; color:var(--muted)">Your ID will be found automatically from your name.</div>`}
+      <div class="grid2">
+        <div><label class="mini">Data Golf ID</label>
+          <input id="dg-id" value="${settings?.dg_id||17646}" placeholder="17646"></div>
+        <div><label class="mini">Name (for reference)</label>
+          <input id="dg-name" value="${esc(settings?.dg_name||"Fitzpatrick, Matt")}" placeholder="Fitzpatrick, Matt"></div>
+      </div>
+      <div style="font-size:12px; color:var(--muted); margin-top:6px">
+        Your ID is pre-filled. Leave it as is unless you know it's different.</div>
       <div id="dg-msg" style="margin-top:10px"></div>
     </div>
     <div class="cfoot"><button class="btn btn-primary btn-sm" id="dg-save" style="width:100%">Save &amp; find my ID</button></div>
@@ -1408,27 +1412,24 @@ async function dgSetup(settings,v){
   document.getElementById("dgx").onclick=close;
 
   document.getElementById("dg-save").onclick=async()=>{
-    const key=val("dg-key"), nm=val("dg-name");
+    const key=val("dg-key").replace(/\s+/g,"");
+    const dgid=parseInt(val("dg-id"),10);
+    const nm=val("dg-name");
     const msg=document.getElementById("dg-msg");
     if(!key){ msg.innerHTML=`<div class="err">Paste your API key first.</div>`; return; }
-    msg.innerHTML=`<div class="who">Looking you up…</div>`;
+    if(!dgid){ msg.innerHTML=`<div class="err">Enter your Data Golf ID.</div>`; return; }
+    msg.innerHTML=`<div class="who">Checking the key…</div>`;
     try{
       const r=await fetch(`${DG_BASE}/get-player-list?file_format=json&key=${encodeURIComponent(key)}`);
-      if(!r.ok) throw new Error("Data Golf rejected the key (status "+r.status+")");
+      if(!r.ok) throw new Error("Data Golf rejected the key (status "+r.status+"). Check it's copied in full.");
       const list=await r.json();
       const arr=Array.isArray(list)?list:(list.players||[]);
-      const norm=x=>String(x||"").toLowerCase().replace(/[^a-z]/g,"");
-      const target=norm(nm);
-      let hit=arr.find(p=>norm(p.player_name)===target);
-      if(!hit){
-        const parts=nm.split(/[\s,]+/).filter(Boolean).map(norm);
-        hit=arr.find(p=>{ const n=norm(p.player_name); return parts.length>1 && parts.every(x=>n.includes(x)); });
-      }
-      if(!hit){ msg.innerHTML=`<div class="err">Couldn't find that name. Data Golf usually lists players as "Surname, First" — try that format.</div>`; return; }
+      const hit=arr.find(p=>+p.dg_id===dgid);
       const {error}=await sb.from("app_settings").upsert({
-        player_id:me.id, dg_key:key, dg_id:hit.dg_id, dg_name:hit.player_name, updated_at:new Date().toISOString() });
+        player_id:me.id, dg_key:key, dg_id:dgid,
+        dg_name: hit?hit.player_name:nm, updated_at:new Date().toISOString() });
       if(error){ msg.innerHTML=`<div class="err">${esc(error.message)}</div>`; return; }
-      msg.innerHTML=`<div style="color:var(--blood-2); font-size:13px">Matched: ${esc(hit.player_name)} (ID ${hit.dg_id})</div>`;
+      msg.innerHTML=`<div style="color:var(--blood-2); font-size:13px">Connected${hit?": "+esc(hit.player_name):""} (ID ${dgid})</div>`;
       flash("Connected");
       setTimeout(()=>{ close(); resultsScreen(v); },900);
     }catch(e){
@@ -1442,67 +1443,92 @@ async function dgImport(settings,v){
   if(!settings?.dg_key || !settings?.dg_id){ flash("Connect Data Golf first"); return; }
   const body=document.getElementById("resbody");
   const thisYear=new Date().getFullYear();
-  const years=[]; for(let y=thisYear; y>=thisYear-7; y--) years.push(y);
+  const years=[]; for(let y=thisYear; y>=2019; y--) years.push(y);
   const tours=["pga","euro"];
-  let imported=0, failed=0;
+  const MYID=+settings.dg_id;
+  let imported=0, checked=0, problems=[];
 
-  body.innerHTML=`<div class="load">Importing — this takes a minute</div>`;
   const prog=(m)=>{ body.innerHTML=`<div class="load">${m}</div>`; };
+  const num=x=>(x==null||x===""||isNaN(+x))?null:+x;
+
+  // pull every round row for me out of whatever shape comes back
+  function harvest(json){
+    const out=[];
+    const walk=(node, ctx)=>{
+      if(!node || typeof node!=="object") return;
+      if(Array.isArray(node)){ node.forEach(n=>walk(n,ctx)); return; }
+      const c={...ctx};
+      if(node.event_name) c.event_name=node.event_name;
+      if(node.event_id!=null) c.event_id=node.event_id;
+      if(node.event_completed) c.event_completed=node.event_completed;
+      if(node.course_name) c.course=node.course_name;
+      if(node.calendar_year!=null) c.year=node.calendar_year;
+      if(node.season!=null && c.year==null) c.year=node.season;
+      // a player node for me?
+      if(node.dg_id!=null && +node.dg_id===MYID){
+        const fin = node.fin_text ?? node.finish ?? null;
+        const rounds=[];
+        for(const k of Object.keys(node)){
+          if(/^round_?\d$/i.test(k) && node[k] && typeof node[k]==="object"){
+            rounds.push({n:+k.replace(/\D/g,""), ...node[k]});
+          }
+        }
+        if(!rounds.length && (node.sg_total!=null || node.score!=null)){
+          rounds.push({n:node.round_num??node.round??1, ...node});
+        }
+        if(rounds.length) out.push({...c, fin, rounds});
+      }
+      Object.values(node).forEach(vv=>{ if(vv && typeof vv==="object") walk(vv,c); });
+    };
+    walk(json,{});
+    return out;
+  }
 
   for(const yr of years){
     for(const tour of tours){
-      prog(`Fetching ${tour.toUpperCase()} ${yr}…`);
+      prog(`Fetching ${tour.toUpperCase()} ${yr}…  (${imported} imported so far)`);
       try{
         const url=`${DG_BASE}/historical-raw-data/rounds?tour=${tour}&event_id=all&year=${yr}&file_format=json&key=${encodeURIComponent(settings.dg_key)}`;
         const r=await fetch(url);
-        if(!r.ok){ failed++; continue; }
+        if(!r.ok){ problems.push(`${tour} ${yr}: HTTP ${r.status}`); await new Promise(x=>setTimeout(x,1400)); continue; }
         const json=await r.json();
-        const events=Array.isArray(json)?json:(json.events||json.data||[]);
-        for(const ev of events){
-          const scores=ev.scores||ev.players||[];
-          const mine=scores.filter(p=>+p.dg_id===+settings.dg_id);
-          if(!mine.length) continue;
-          const rounds=[];
-          mine.forEach(p=>{
-            [1,2,3,4].forEach(n=>{
-              const rd=p["round_"+n];
-              if(rd && (rd.score!=null || rd.sg_total!=null)) rounds.push({n, ...rd});
-            });
-            if(!rounds.length && p.score!=null) rounds.push({n:1, ...p});
-          });
-          if(!rounds.length) continue;
-          const avg=f=>{ const xs=rounds.map(r=>r[f]).filter(x=>x!=null&&!isNaN(x)).map(Number);
-                         return xs.length? xs.reduce((a,b)=>a+b,0)/xs.length : null; };
-          const fin=mine[0].fin_text || mine[0].finish || null;
+        const mine=harvest(json);
+        checked++;
+        for(const ev of mine){
+          if(ev.event_id==null) continue;
+          const rs=ev.rounds;
+          const avg=f=>{ const xs=rs.map(x=>num(x[f])).filter(x=>x!=null); return xs.length? xs.reduce((a,b)=>a+b,0)/xs.length : null; };
           const payload={
-            player_id:me.id, event_id:ev.event_id??ev.event_num??null,
-            event_name:ev.event_name||ev.event||"Event", course:ev.course_name||ev.course||null,
-            tour, year:yr, start_date:ev.event_completed||ev.date||null,
-            finish:fin, rounds:rounds.length,
+            player_id:me.id, event_id:+ev.event_id, event_name:ev.event_name||"Event",
+            course:ev.course||null, tour, year:+(ev.year||yr),
+            start_date: ev.event_completed || null,
+            finish: ev.fin!=null?String(ev.fin):null, rounds:rs.length,
             sg_ott:avg("sg_ott"), sg_app:avg("sg_app"), sg_arg:avg("sg_arg"),
             sg_putt:avg("sg_putt"), sg_t2g:avg("sg_t2g"), sg_total:avg("sg_total"),
             driving_dist:avg("driving_dist"), driving_acc:avg("driving_acc"),
             gir:avg("gir"), scrambling:avg("scrambling")
           };
-          if(payload.event_id==null) continue;
           const {error}=await sb.from("dg_results").upsert(payload,{onConflict:"player_id,event_id,year"});
-          if(!error){
-            imported++;
-            for(const rd of rounds){
-              await sb.from("dg_rounds").upsert({
-                player_id:me.id, event_id:payload.event_id, year:yr, round_num:rd.n,
-                score:rd.score??null, sg_ott:rd.sg_ott??null, sg_app:rd.sg_app??null,
-                sg_arg:rd.sg_arg??null, sg_putt:rd.sg_putt??null, sg_total:rd.sg_total??null
-              },{onConflict:"player_id,event_id,year,round_num"});
-            }
+          if(error){ problems.push(error.message); continue; }
+          imported++;
+          for(const rd of rs){
+            await sb.from("dg_rounds").upsert({
+              player_id:me.id, event_id:+ev.event_id, year:+(ev.year||yr), round_num:rd.n||1,
+              score:num(rd.score), sg_ott:num(rd.sg_ott), sg_app:num(rd.sg_app),
+              sg_arg:num(rd.sg_arg), sg_putt:num(rd.sg_putt), sg_total:num(rd.sg_total)
+            },{onConflict:"player_id,event_id,year,round_num"});
           }
         }
-      }catch(e){ failed++; }
-      await new Promise(r=>setTimeout(r,1400)); // stay under 45 req/min
+      }catch(e){ problems.push(`${tour} ${yr}: ${e.message}`); }
+      await new Promise(x=>setTimeout(x,1400)); // respect 45 req/min
     }
   }
   await sb.from("app_settings").update({last_import:new Date().toISOString()}).eq("player_id",me.id);
-  flash(imported?`Imported ${imported} events`:"Nothing new found");
+  if(!imported){
+    body.innerHTML=`<div class="empty">Nothing imported.${problems.length?`<div style="margin-top:8px; font-size:12px; color:var(--muted)">${esc(problems.slice(0,3).join(" · "))}</div>`:""}</div>`;
+    return;
+  }
+  flash(`Imported ${imported} events`);
   resultsScreen(v);
 }
 

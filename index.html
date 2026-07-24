@@ -209,6 +209,7 @@ const app = document.getElementById("app");
 let me = null;              // {id, full_name, role}
 let players = [];           // coach: their linked players
 let activePlayerId = null;  // whose day the grid is showing
+let pendingCount = 0;       // people signed up but not yet linked
 let activeDay = new Date().toISOString().slice(0,10);
 let drillMap = {};          // id -> drill
 let gridRows = [];          // working copy of the day's rows
@@ -292,11 +293,16 @@ async function boot(){
       .select("player_id, profiles!coach_players_player_id_fkey(full_name)").eq("coach_id",me.id);
     players=(links||[]).map(l=>({id:l.player_id,name:l.profiles?.full_name||"Player"}));
     activePlayerId=players[0]?.id||null;
+    pendingCount=0;
   }else if(me.role==="viewer"){
     const {data:pv}=await sb.from("player_viewers").select("player_id").eq("viewer_id",me.id).limit(1).maybeSingle();
     activePlayerId=pv?.player_id||null;
   }else{
     activePlayerId=me.id;
+    try{
+      const {data:pend}=await sb.rpc("pending_team_members");
+      pendingCount=(pend||[]).length;
+    }catch(e){ pendingCount=0; }
   }
   shell();
 }
@@ -312,7 +318,7 @@ function shell(){
     ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["players","Players"],["library","Drills"],["progress","Progress"]]
     : me.role==="viewer"
     ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["progress","Progress"]]
-    : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build Day"],["season","Season"],["results","Results"],["team","Team"],["progress","Progress"]];
+    : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build Day"],["season","Season"],["results","Results"],["team",pendingCount?`Team (${pendingCount})`:"Team"],["progress","Progress"]];
   if(!currentTab) currentTab=tabs[0][0];
   app.innerHTML=`
     <header><div class="wrap">
@@ -1322,43 +1328,84 @@ async function seasonScreen(v){
    11. TEAM — you grant viewer access
    ============================================================ */
 async function teamScreen(v){
+  v.innerHTML=`<div class="load">Loading</div>`;
+
+  const [{data:linked}, pend] = await Promise.all([
+    sb.from("player_viewers")
+      .select("id, viewer_id, profiles!player_viewers_viewer_id_fkey(full_name, role)")
+      .eq("player_id",me.id),
+    sb.rpc("pending_team_members")
+  ]);
+  const pending = pend?.data || [];
+
   v.innerHTML=`
-    <div class="card">
-      <h3 style="font-size:15px; text-transform:uppercase; letter-spacing:.02em; margin-bottom:10px">Give someone access</h3>
-      <p style="font-size:12px; color:var(--muted); margin:0 0 12px">They sign up first (choosing <b>Viewer</b>), then you add the email they used. Viewers can see your sheet, week, schedule and season — and comment on drills — but can't change anything.</p>
-      <div class="inline"><input id="vemail" placeholder="coach@email.com" style="flex:1"><button class="btn btn-primary btn-sm" id="vadd">Give access</button></div>
+    ${pending.length?`
+    <div class="card" style="border-color:var(--blood-2)">
+      <div class="inline" style="margin-bottom:10px">
+        <span class="pill" style="background:var(--blood-2); color:var(--lime-ink)">${pending.length}</span>
+        <h3 style="font-size:15px; text-transform:uppercase; letter-spacing:.02em; margin:0">
+          Waiting to be added</h3>
+      </div>
+      <p style="font-size:12px; color:var(--muted); margin:0 0 12px">
+        These people have signed up but don't have access to your data yet.</p>
+      ${pending.map(p=>`
+        <div class="row-item">
+          <span class="pill p-Technical">${esc(p.role)}</span>
+          <div class="name">${esc(p.full_name||"—")}
+            <small>${esc(p.email||"")}</small></div>
+          <button class="btn btn-primary btn-sm padd" data-id="${p.id}">Give access</button>
+        </div>`).join("")}
+    </div>`:""}
+
+    <div class="card" style="${pending.length?"margin-top:14px":""}">
+      <h3 style="font-size:15px; text-transform:uppercase; letter-spacing:.02em; margin-bottom:10px">Add by email</h3>
+      <p style="font-size:12px; color:var(--muted); margin:0 0 12px">
+        If someone isn't listed above, add them directly. Viewers can see your sheet,
+        week, schedule and season, and comment on drills — but can't change anything.</p>
+      <div class="inline"><input id="vemail" placeholder="coach@email.com" style="flex:1">
+        <button class="btn btn-primary btn-sm" id="vadd">Give access</button></div>
     </div>
-    <div class="sec-h"><h2>Your team</h2></div>
-    <div class="card" id="vlist"><div class="load">Loading</div></div>`;
+
+    <div class="sec-h"><h2>Your team</h2><span class="meta">${(linked||[]).length} linked</span></div>
+    <div class="card" id="vlist"></div>`;
+
+  // one-tap add from the pending list
+  v.querySelectorAll(".padd").forEach(b2=>b2.onclick=async()=>{
+    const {error}=await sb.from("player_viewers").insert({player_id:me.id, viewer_id:b2.dataset.id});
+    if(error){ flash(error.message.includes("duplicate")?"Already has access":error.message); return; }
+    flash("Access granted"); keepScroll(()=>teamScreen(v));
+  });
+
   document.getElementById("vadd").onclick=async()=>{
     const email=val("vemail").toLowerCase();
+    if(!email){ flash("Enter an email"); return; }
     const {data:found}=await sb.rpc("find_profile_by_email",{e:email});
-    if(!found){ flash("No account with that email"); return; }
+    if(!found){ flash("No account with that email yet"); return; }
     const {error}=await sb.from("player_viewers").insert({player_id:me.id,viewer_id:found});
     if(error){ flash(error.message.includes("duplicate")?"Already has access":error.message); return; }
-    flash("Access granted"); document.getElementById("vemail").value=""; teamScreen(v);
+    flash("Access granted"); document.getElementById("vemail").value=""; keepScroll(()=>teamScreen(v));
   };
-  const {data}=await sb.from("player_viewers")
-    .select("id, viewer_id, profiles!player_viewers_viewer_id_fkey(full_name, role)").eq("player_id",me.id);
-  const box=document.getElementById("vlist");
-  if(!data?.length){ box.innerHTML=`<div class="empty">Nobody has access yet.</div>`; return; }
-  box.innerHTML=data.map(x=>`
-    <div class="row-item">
-      <span class="pill p-Technical">${esc(x.profiles?.role||"viewer")}</span>
-      <div class="name">${esc(x.profiles?.full_name||"—")}</div>
-      <button class="rowdel" data-id="${x.id}" title="Remove access">×</button>
-    </div>`).join("");
-  box.querySelectorAll(".rowdel").forEach(b=>b.onclick=async()=>{
-    await sb.from("player_viewers").delete().eq("id",b.dataset.id); teamScreen(v);
-  });
-}
 
+  const box=document.getElementById("vlist");
+  if(!(linked||[]).length){ box.innerHTML=`<div class="empty" style="border:0">Nobody has access yet.</div>`; }
+  else{
+    box.innerHTML=linked.map(x=>`
+      <div class="row-item">
+        <span class="pill p-Technical">${esc(x.profiles?.role||"viewer")}</span>
+        <div class="name">${esc(x.profiles?.full_name||"—")}</div>
+        <button class="rowdel" data-id="${x.id}" title="Remove access">×</button>
+      </div>`).join("");
+    box.querySelectorAll(".rowdel").forEach(b2=>b2.onclick=async()=>{
+      if(!confirm("Remove their access?")) return;
+      await sb.from("player_viewers").delete().eq("id",b2.dataset.id);
+      flash("Access removed"); keepScroll(()=>teamScreen(v));
+    });
+  }
+}
 
 /* ============================================================
    12. RESULTS — Data Golf import + performance views
    ============================================================ */
-// Data Golf is reached through a Supabase Edge Function (browsers can't call
-// it directly — CORS). The key lives on the server as a secret.
 async function dgCall(payload){
   const { data:{ session } } = await sb.auth.getSession();
   const r = await fetch(`${SUPABASE_URL}/functions/v1/datagolf`, {
@@ -1375,12 +1422,20 @@ async function dgCall(payload){
   if(!r.ok || js?.error) throw new Error(js?.error || `Request failed (${r.status})`);
   return js;
 }
+
 function sgColor(v){ if(v==null) return "var(--muted)"; return v>=0.5?"#6fd8ab":v>=0?"#c3f53c":v>=-0.5?"#e0a26f":"#e06f6f"; }
 function sgFmt(v){ return v==null?"—":((v>0?"+":"")+Number(v).toFixed(2)); }
 
 let resultsView = "list";
 let _rvScrollX = 0;
 let corrWindow = 8;
+const SGCATS=[["sg_ott","Off tee"],["sg_app","Approach"],["sg_arg","Around grn"],["sg_putt","Putting"]];
+let trendCat="sg_app";
+let lagWeeks=4;
+let lagCat="sg_app";
+const PRACTICE_FOR={sg_ott:"Driving", sg_app:"Approach", sg_arg:"Short Game", sg_putt:"Putting"};
+function sgOpacity(v){ return Math.min(Math.abs(+v||0)/1.2,1)*0.75+0.15; }
+function evLabel(r){ return (r.event_name||"").replace(/Championship|Invitational|Tournament/gi,"").trim().slice(0,14); }
 
 async function resultsScreen(v){
   const pid = me.role==="player" ? me.id : activePlayerId;
@@ -1433,7 +1488,6 @@ async function resultsScreen(v){
   else renderCorrelation(body,results,pid);
 }
 
-/* ---- setup: key + player id ---- */
 async function dgSetup(settings,v){
   const wrap=document.createElement("div"); wrap.className="cmodal";
   wrap.innerHTML=`<div class="cbox">
@@ -1447,8 +1501,7 @@ async function dgSetup(settings,v){
           <input id="dg-name" value="${esc(settings?.dg_name||"Fitzpatrick, Matt")}"></div>
       </div>
       <p style="font-size:12px; color:var(--muted); margin:10px 0 0">
-        The API key is set once in Supabase as a function secret — see the setup notes.
-        Press Test to check the connection.</p>
+        The API key is set once in Supabase as a function secret. Press Test to check the connection.</p>
       <div id="dg-msg" style="margin-top:10px"></div>
     </div>
     <div class="cfoot">
@@ -1483,7 +1536,6 @@ async function dgSetup(settings,v){
   };
 }
 
-/* ---- import: pull rounds, aggregate to events ---- */
 async function dgImport(settings,v){
   if(!settings?.dg_id){ flash("Set your Data Golf ID first"); return; }
   const body=document.getElementById("resbody");
@@ -1491,12 +1543,10 @@ async function dgImport(settings,v){
   const years=[]; for(let y=thisYear; y>=2019; y--) years.push(y);
   const tours=["pga","euro"];
   const MYID=+settings.dg_id;
-  let imported=0, checked=0, problems=[];
-
+  let imported=0, problems=[];
   const prog=(m)=>{ body.innerHTML=`<div class="load">${m}</div>`; };
   const num=x=>(x==null||x===""||isNaN(+x))?null:+x;
 
-  // pull every round row for me out of whatever shape comes back
   function harvest(json){
     const out=[];
     const walk=(node, ctx)=>{
@@ -1509,7 +1559,6 @@ async function dgImport(settings,v){
       if(node.course_name) c.course=node.course_name;
       if(node.calendar_year!=null) c.year=node.calendar_year;
       if(node.season!=null && c.year==null) c.year=node.season;
-      // a player node for me?
       if(node.dg_id!=null && +node.dg_id===MYID){
         const fin = node.fin_text ?? node.finish ?? null;
         const rounds=[];
@@ -1535,7 +1584,6 @@ async function dgImport(settings,v){
       try{
         const json=await dgCall({action:"rounds", tour, year:yr});
         const mine=harvest(json);
-        checked++;
         for(const ev of mine){
           if(ev.event_id==null) continue;
           const rs=ev.rounds;
@@ -1562,7 +1610,7 @@ async function dgImport(settings,v){
           }
         }
       }catch(e){ problems.push(`${tour} ${yr}: ${e.message}`); }
-      await new Promise(x=>setTimeout(x,1400)); // respect 45 req/min
+      await new Promise(x=>setTimeout(x,1400));
     }
   }
   await sb.from("app_settings").update({last_import:new Date().toISOString()}).eq("player_id",me.id);
@@ -1574,7 +1622,6 @@ async function dgImport(settings,v){
   resultsScreen(v);
 }
 
-/* ---- view: tournament list + detail ---- */
 function renderResultsList(box,results,pid){
   box.innerHTML=results.map((r,i)=>{
     const tier = MAJOR_RE.test((r.event_name||"").trim()) ? "Major"
@@ -1610,7 +1657,7 @@ async function showResult(r,pid){
       <button class="cx" id="rx">×</button></div>
     <div class="clist" style="padding:14px 16px">
       ${cats.map(c=>{
-        const val=+c[1]||0, pct=Math.min(Math.abs(val)/max*50,50), left=val<0?50-pct:50;
+        const val2=+c[1]||0, pct=Math.min(Math.abs(val2)/max*50,50), left=val2<0?50-pct:50;
         return `<div style="margin-bottom:13px">
           <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px">
             <span style="color:var(--muted)">${c[0]}</span>
@@ -1643,18 +1690,6 @@ async function showResult(r,pid){
   document.getElementById("rx").onclick=close;
 }
 
-
-/* ---- shared helpers for the results views ---- */
-const SGCATS=[["sg_ott","Off tee"],["sg_app","Approach"],["sg_arg","Around grn"],["sg_putt","Putting"]];
-let trendCat="sg_app";
-let lagWeeks=4;
-let lagCat="sg_app";
-const PRACTICE_FOR={sg_ott:"Driving", sg_app:"Approach", sg_arg:"Short Game", sg_putt:"Putting"};
-
-function sgOpacity(v){ return Math.min(Math.abs(+v||0)/1.2,1)*0.75+0.15; }
-function evLabel(r){ return (r.event_name||"").replace(/Championship|Invitational|Tournament/gi,"").trim().slice(0,14); }
-
-/* ---- 1. HEATMAP ---- */
 function renderHeatmap(box,results){
   const rows=results.slice(0,30);
   if(!rows.length){ box.innerHTML=`<div class="empty">No results yet.</div>`; return; }
@@ -1684,7 +1719,6 @@ function renderHeatmap(box,results){
     </div>`;
 }
 
-/* ---- 2. TREND ---- */
 function renderTrend(box,results){
   const CATS=[...SGCATS,["sg_total","Total"]];
   const rows=results.slice(0,20).filter(r=>r[trendCat]!=null).reverse();
@@ -1692,8 +1726,8 @@ function renderTrend(box,results){
   const vals=rows.map(r=>+r[trendCat]);
   const hi=Math.max(0.2,...vals), lo=Math.min(-0.2,...vals);
   const span=hi-lo;
-  const H=200;                       // chart height in px
-  const zeroPct=(hi/span)*100;       // where the zero line sits from the top
+  const H=200;
+  const zeroPct=(hi/span)*100;
   const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
   const half=Math.ceil(vals.length/2);
   const firstHalf=vals.slice(0,half).reduce((a,b)=>a+b,0)/half;
@@ -1713,12 +1747,10 @@ function renderTrend(box,results){
     </div>
     <div class="card">
       <div style="position:relative; height:${H}px; margin-left:38px">
-        <!-- zero line -->
         <div style="position:absolute; left:0; right:0; top:${zeroPct.toFixed(1)}%; border-top:1px solid var(--faint)"></div>
         <span style="position:absolute; left:-36px; top:${zeroPct.toFixed(1)}%; transform:translateY(-50%); font-size:10px; color:var(--faint)">0.00</span>
         <span style="position:absolute; left:-36px; top:0; font-size:10px; color:var(--faint)">${sgFmt(hi)}</span>
         <span style="position:absolute; left:-36px; bottom:0; font-size:10px; color:var(--faint)">${sgFmt(lo)}</span>
-        <!-- bars -->
         <div style="position:absolute; inset:0; display:flex; gap:4px; align-items:stretch">
           ${rows.map(r=>{
             const v=+r[trendCat];
@@ -1746,7 +1778,6 @@ function renderTrend(box,results){
   box.querySelectorAll(".tcat").forEach(b=>b.onclick=()=>{ trendCat=b.dataset.c; keepScroll(()=>renderTrend(box,results)); });
 }
 
-/* ---- 3. FORM GUIDE ---- */
 function renderForm(box,results){
   const last=results.slice(0,5);
   if(!last.length){ box.innerHTML=`<div class="empty">No results yet.</div>`; return; }
@@ -1771,7 +1802,6 @@ function renderForm(box,results){
         </tr></thead>
         <tbody>
         ${last.map(r=>{
-          // best and worst category this week, to highlight
           const present=SGCATS.filter(c=>r[c[0]]!=null);
           const best=present.length?present.reduce((m,c)=>+r[c[0]]>+r[m[0]]?c:m):null;
           const worst=present.length?present.reduce((m,c)=>+r[c[0]]<+r[m[0]]?c:m):null;
@@ -1802,7 +1832,6 @@ function renderForm(box,results){
       Green outline = strongest category that week · orange = weakest.</p>`;
 }
 
-/* ---- 4. PRACTICE LAG ---- */
 async function renderLag(box,results,pid){
   box.innerHTML=`<div class="load">Working out the lag</div>`;
   const evs=results.filter(r=>r.start_date && r[lagCat]!=null).slice(0,24);
@@ -1829,20 +1858,18 @@ async function renderLag(box,results,pid){
   const sgs=pts.map(p=>p.sg);
   const loSG=Math.min(...sgs), hiSG=Math.max(...sgs), rng=(hiSG-loSG)||1;
 
-  // least-squares fit: sg = m*balls + c
   const n=pts.length;
   const mx=pts.reduce((a,p)=>a+p.balls,0)/n, my=sgs.reduce((a,b)=>a+b,0)/n;
-  let num=0, dxx=0, dyy=0;
-  pts.forEach(p=>{ num+=(p.balls-mx)*(p.sg-my); dxx+=(p.balls-mx)**2; dyy+=(p.sg-my)**2; });
-  const m = dxx? num/dxx : 0;
+  let num2=0, dxx=0, dyy=0;
+  pts.forEach(p=>{ num2+=(p.balls-mx)*(p.sg-my); dxx+=(p.balls-mx)**2; dyy+=(p.sg-my)**2; });
+  const m = dxx? num2/dxx : 0;
   const c = my - m*mx;
-  const rcoef = (dxx&&dyy)? num/Math.sqrt(dxx*dyy) : 0;
+  const rcoef = (dxx&&dyy)? num2/Math.sqrt(dxx*dyy) : 0;
   const strength = Math.abs(rcoef)<0.2?"no clear relationship":Math.abs(rcoef)<0.45?"a weak relationship":"a moderate relationship";
   const direction = rcoef>0.05?"more practice went with better performance":rcoef<-0.05?"more practice went with worse performance":"volume and performance moved independently";
 
-  // fit line endpoints in chart space
-  const X=(v)=>(v/maxB)*92+2;                 // % from left
-  const Y=(v)=>((v-loSG)/rng)*86+5;           // % from bottom
+  const X=(v)=>(v/maxB)*92+2;
+  const Y=(v)=>((v-loSG)/rng)*86+5;
   const y0=c, y1=m*maxB+c;
   const fitVisible = dxx>0;
 
@@ -1889,17 +1916,14 @@ async function renderLag(box,results,pid){
   box.querySelectorAll(".lwk").forEach(b2=>b2.onclick=()=>{ lagWeeks=+b2.dataset.w; keepScroll(()=>renderLag(box,results,pid)); });
 }
 
-/* ---- 5. COMPARE EVENTS — checklist with search ---- */
 let cmpA=new Set(), cmpB=new Set(), cmpInit=false, cmpTarget="A", cmpSearch="";
 
 function renderTier(box,results){
   if(!results.length){ box.innerHTML=`<div class="empty">No results yet.</div>`; return; }
-
   if(!cmpInit){
     results.forEach(r=>{ if(MAJOR_RE.test((r.event_name||"").trim())) cmpA.add(r.id); else cmpB.add(r.id); });
     cmpInit=true;
   }
-
   const inA=results.filter(r=>cmpA.has(r.id));
   const inB=results.filter(r=>cmpB.has(r.id));
   const avg=(arr,f)=>{ const xs=arr.map(r=>r[f]).filter(x=>x!=null).map(Number); return xs.length? xs.reduce((x,y)=>x+y,0)/xs.length : null; };
@@ -1948,7 +1972,7 @@ function renderTier(box,results){
           const tag = isA?`<span class="pill" style="background:var(--blood-2); color:var(--lime-ink)">A</span>`
                    : isB?`<span class="pill" style="background:#7fc4dd; color:var(--lime-ink)">B</span>`
                    : `<span class="pill p-Technical">—</span>`;
-          return `<label class="row-item cmprow" data-id="${r.id}" style="cursor:pointer">
+          return `<label class="row-item" style="cursor:pointer">
             <input type="checkbox" class="cmpchk" data-id="${r.id}" ${(isA||isB)?"checked":""} style="width:18px; height:18px; accent-color:var(--blood-2)">
             <div class="name">${esc(r.event_name||"")}
               <small>${r.year||""} · ${esc(r.finish||"—")} · ${sgFmt(r.sg_total)}</small></div>
@@ -1988,7 +2012,6 @@ function renderTier(box,results){
   };
 }
 
-/* ---- view: practice vs performance ---- */
 async function renderCorrelation(box,results,pid){
   box.innerHTML=`<div class="load">Working out the correlation</div>`;
   const recent=results.slice(0,corrWindow).filter(r=>r.start_date);
@@ -2006,12 +2029,12 @@ async function renderCorrelation(box,results,pid){
     const sg=vals.length? vals.reduce((a,b)=>a+b,0)/vals.length : null;
     const half=Math.ceil(vals.length/2);
     const recentAvg=vals.slice(0,half).reduce((a,b)=>a+b,0)/(half||1);
-    const earlierAvg=vals.slice(half).length? vals.slice(half).reduce((a,b)=>a+b,0)/vals.slice(half).length : recentAvg;
+    const older=vals.slice(half);
+    const earlierAvg=older.length? older.reduce((a,b)=>a+b,0)/older.length : recentAvg;
     const trend = recentAvg-earlierAvg > 0.1 ? "up" : recentAvg-earlierAvg < -0.1 ? "down" : "flat";
     return {cat,balls,mins,sg,trend};
   });
   const maxB=Math.max(1,...rows.map(r=>r.balls));
-
   const best=rows.filter(r=>r.sg!=null).sort((a,b)=>b.sg-a.sg)[0];
   const worst=rows.filter(r=>r.sg!=null).sort((a,b)=>a.sg-b.sg)[0];
   const mostPractised=rows.slice().sort((a,b)=>b.balls-a.balls)[0];
@@ -2043,7 +2066,6 @@ async function renderCorrelation(box,results,pid){
         Strongest: <b style="color:${sgColor(best.sg)}">${best.cat} ${sgFmt(best.sg)}</b>.
         Weakest: <b style="color:${sgColor(worst.sg)}">${worst.cat} ${sgFmt(worst.sg)}</b>.
         Most practice volume went to <b style="color:var(--ink)">${mostPractised.cat}</b> (${mostPractised.balls} balls).
-        ${worst.balls < mostPractised.balls/2 ? `Your weakest area has had roughly ${Math.round(worst.balls/Math.max(mostPractised.balls,1)*100)}% of the volume your most-practised one has.` : ""}
       </div></div>`:""}`;
 
   box.querySelectorAll(".cwin").forEach(b=>b.onclick=()=>{

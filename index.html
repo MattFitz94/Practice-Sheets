@@ -162,7 +162,28 @@
   .flash{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--blood-2); color:var(--lime-ink); padding:11px 20px; border-radius:8px; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; opacity:0; transition:opacity .2s; z-index:60}
   .flash.show{opacity:1}
   .load{text-align:center; padding:44px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; font-size:12px}
-  @media (max-width:520px){ .stat-row{grid-template-columns:repeat(2,1fr)} .authcard h1{font-size:36px} }
+  .seasonmob{display:none}
+  .sfil.on{background:var(--blood-2); color:var(--lime-ink); border-color:var(--blood-2)}
+
+  @media (max-width:520px){
+    .stat-row{grid-template-columns:repeat(2,1fr)}
+    .authcard h1{font-size:36px}
+  }
+  @media (max-width:760px){
+    /* season: cards instead of the wide table */
+    .seasondesk{display:none}
+    .seasonmob{display:block}
+    /* tabs scroll rather than squash */
+    nav.tabs{overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none}
+    nav.tabs::-webkit-scrollbar{display:none}
+    nav.tabs button{flex:0 0 auto; white-space:nowrap}
+    /* toolbars wrap more kindly */
+    .daybar{gap:8px}
+    .daybar .dsel{padding:5px 7px}
+    .wrap{padding:0 12px}
+    .sec-h h2{font-size:19px}
+    .cbox{max-height:88vh}
+  }
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -267,10 +288,10 @@ sb.auth.onAuthStateChange(()=>boot());
 let currentTab=null;
 function shell(){
   const tabs = me.role==="coach"
-    ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["players","Players"],["library","Drills"],["progress","Progress"]]
+    ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["players","Players"],["library","Drills"],["progress","Progress"]]
     : me.role==="viewer"
-    ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["progress","Progress"]]
-    : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build Day"],["season","Season"],["team","Team"],["progress","Progress"]];
+    ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["progress","Progress"]]
+    : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build Day"],["season","Season"],["results","Results"],["team","Team"],["progress","Progress"]];
   if(!currentTab) currentTab=tabs[0][0];
   app.innerHTML=`
     <header><div class="wrap">
@@ -296,6 +317,7 @@ function renderTab(){
   else if(currentTab==="week") weekScreen(v);
   else if(currentTab==="sched") scheduleScreen(v);
   else if(currentTab==="build") buildScreen(v);
+  else if(currentTab==="results") resultsScreen(v);
   else if(currentTab==="season") seasonScreen(v);
   else if(currentTab==="team") teamScreen(v);
   else if(currentTab==="players") coachPlayers(v);
@@ -1038,7 +1060,27 @@ async function buildScreen(v){
 /* ============================================================
    10. SEASON — tournament schedule, mirrors the spreadsheet
    ============================================================ */
+
+/* ---- season tiers: majors, signature events, regular, off ---- */
+const MAJOR_RE = /^\s*(MASTERS|THE MASTERS|USPGA|US PGA|PGA CHAMPIONSHIP|US OPEN|THE OPEN|OPEN CHAMPIONSHIP)\s*$/i;
+const SIGNATURE_RE = /Players Championship|Tour Championship|Ryder Cup|DP World Tour Championship|FedEx|BMW Championship|Memorial|Genesis|Arnold Palmer|Bay Hill|Travellers|Travelers/i;
+const TIER_STYLE = {
+  Major:     {ac:"#c3f53c", bg:"rgba(195,245,60,.13)", row:"rgba(195,245,60,.07)", badge:"MAJOR"},
+  Signature: {ac:"#a9a4e8", bg:"rgba(169,164,232,.12)", row:"rgba(169,164,232,.06)", badge:"BIG"},
+  Event:     {ac:"#7fc4dd", bg:"rgba(127,196,221,.10)", row:"rgba(127,196,221,.05)", badge:""},
+  Off:       {ac:"#5b6672", bg:"transparent",           row:"transparent",           badge:""},
+  Unknown:   {ac:"#7a6a2e", bg:"rgba(122,106,46,.08)",  row:"rgba(122,106,46,.05)",  badge:""}
+};
+function weekTier(w){
+  if(w.status!=="Tournament") return w.status==="Off" ? "Off" : "Unknown";
+  const t=(w.tournament||"").trim();
+  if(MAJOR_RE.test(t)) return "Major";
+  if(SIGNATURE_RE.test(t)) return "Signature";
+  return "Event";
+}
+
 let seasonYear = new Date().getFullYear();
+let seasonFilter = "all";
 
 async function seasonScreen(v){
   const pid = me.role==="player" ? me.id : activePlayerId;
@@ -1052,9 +1094,10 @@ async function seasonScreen(v){
   const {data:weeks}=await sb.from("season_weeks").select("*")
     .eq("player_id",pid).eq("year",seasonYear).order("week");
 
-  const ev=(weeks||[]).filter(w=>w.status==="Tournament").length;
-  const off=(weeks||[]).filter(w=>w.status==="Off").length;
-  const unk=(weeks||[]).filter(w=>w.status==="Unknown").length;
+  const tally={Major:0,Signature:0,Event:0,Off:0,Unknown:0};
+  (weeks||[]).forEach(w=>{ tally[weekTier(w)]++; });
+  const ev=tally.Major+tally.Signature+tally.Event;
+  const off=tally.Off, unk=tally.Unknown;
   const stPill={Tournament:"p-Performance",Off:"p-Technical",Unknown:"p-Driving"};
   const fmt=d=>{ if(!d)return "—"; const x=new Date(d+"T00:00:00"); return x.toLocaleDateString(undefined,{day:'numeric',month:'short'}); };
 
@@ -1066,13 +1109,19 @@ async function seasonScreen(v){
         </select></div>
       ${canEdit?`<button class="btn btn-ghost btn-sm" id="addyear">+ Add year</button>`:""}
       <button class="btn btn-ghost btn-sm" id="seasonexport">Add year to calendar</button>
-      <span class="who" style="margin-left:auto; display:flex; gap:12px; align-items:center; flex-wrap:wrap">
-        <span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--blood-2);margin-right:5px"></i>${ev} events</span>
-        <span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--faint);margin-right:5px"></i>${off} off</span>
-        <span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#7a6a2e;margin-right:5px"></i>${unk} unknown</span>
+      <span class="who" style="margin-left:auto; display:flex; gap:11px; align-items:center; flex-wrap:wrap">
+        ${["Major","Signature","Event","Off","Unknown"].map(k=>`<span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${TIER_STYLE[k].ac};margin-right:5px"></i>${tally[k]} ${k==="Signature"?"big":k.toLowerCase()}</span>`).join("")}
+        <span style="color:var(--ink)"><b>${ev}</b> events total</span>
       </span>
     </div>
-    <div class="gridwrap">
+    <div id="seasonfilter" style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm sfil on" data-f="all">All</button>
+      <button class="btn btn-ghost btn-sm sfil" data-f="Tournament">Events</button>
+      <button class="btn btn-ghost btn-sm sfil" data-f="Major">Majors</button>
+      <button class="btn btn-ghost btn-sm sfil" data-f="Signature">Big weeks</button>
+      <button class="btn btn-ghost btn-sm sfil" data-f="Off">Off</button>
+    </div>
+    <div class="gridwrap seasondesk">
       <table class="grid" style="min-width:900px">
         <thead><tr>
           <th>Wk</th><th>Dates</th><th>Country</th><th>City</th>
@@ -1081,6 +1130,7 @@ async function seasonScreen(v){
         <tbody id="srows"></tbody>
       </table>
     </div>
+    <div class="seasonmob" id="scards"></div>
     ${canEdit?`<div class="gridtools">
       <button class="btn btn-ghost btn-sm" id="addweek">+ Add week</button>
       <div class="savebar" style="margin-left:auto">
@@ -1101,23 +1151,30 @@ async function seasonScreen(v){
   };
 
   let rows=(weeks||[]).map(w=>({...w,_dirty:false}));
+  function passFilter(w){
+    if(seasonFilter==="all") return true;
+    if(seasonFilter==="Tournament") return w.status==="Tournament";
+    if(seasonFilter==="Major"||seasonFilter==="Signature") return weekTier(w)===seasonFilter;
+    return w.status===seasonFilter;
+  }
   function drawSeason(){
-    const tb=document.getElementById("srows"); tb.innerHTML="";
+    drawCards();
+    const tb=document.getElementById("srows"); if(!tb) return; tb.innerHTML="";
     rows.forEach((w,i)=>{
+      if(!passFilter(w)) return;
       const tr=document.createElement("tr");
       const ti=(f,val,w2)=>canEdit
         ? `<input class="cell-txt" data-i="${i}" data-f="${f}" value="${esc(val||"")}" style="min-width:${w2||110}px">`
         : `<span class="auto" style="text-align:left;display:block">${val?esc(val):"—"}</span>`;
-      const stripe = w.status==="Tournament" ? "var(--blood-2)" : w.status==="Off" ? "var(--faint)" : "#7a6a2e";
-      const rowBg  = w.status==="Tournament" ? "rgba(195,245,60,.05)" : "transparent";
-      const isMajor = /MASTERS|USPGA|US OPEN|THE OPEN|Ryder Cup|Players Championship/i.test(w.tournament||"");
-      tr.style.background=rowBg;
+      const tier = weekTier(w), ts = TIER_STYLE[tier];
+      tr.style.background=ts.row;
+      tr.style.borderLeft="4px solid "+ts.ac;
       tr.innerHTML=`
-        <td style="text-align:center; color:var(--muted); font-weight:700; border-left:4px solid ${stripe}">${w.week}${isMajor?'<div style="font-size:9px; color:var(--blood-2); letter-spacing:.06em">MAJOR</div>':''}</td>
+        <td style="text-align:center; color:${tier==="Off"?"var(--muted)":ts.ac}; font-weight:700">${w.week}${ts.badge?`<div style="font-size:9px; letter-spacing:.06em">${ts.badge}</div>`:''}</td>
         <td style="text-align:center; font-size:12px; color:var(--muted); white-space:nowrap">${fmt(w.start_date)} – ${fmt(w.end_date)}</td>
         <td style="text-align:center">${ti("country",w.country,90)}</td>
         <td>${ti("city",w.city,110)}</td>
-        <td>${ti("tournament",w.tournament,160)}</td>
+<td style="color:${ts.ac}">${ti("tournament",w.tournament,160)}</td>
         <td>${ti("course",w.course,140)}</td>
         <td style="text-align:center">${canEdit
           ? `<select class="drillsel" data-i="${i}" data-f="status" style="min-width:120px">
@@ -1138,10 +1195,79 @@ async function seasonScreen(v){
     });
     tb.querySelectorAll(".rowdel").forEach(b=>b.onclick=async()=>{
       const r=rows[+b.dataset.i];
+      if(!confirm("Remove week "+r.week+"?")) return;
       if(r.id) await sb.from("season_weeks").delete().eq("id",r.id);
       rows.splice(+b.dataset.i,1); drawSeason();
     });
   }
+
+  /* ---- mobile: one card per week ---- */
+  function drawCards(){
+    const box=document.getElementById("scards"); if(!box) return;
+    const list=rows.map((w,i)=>({w,i})).filter(({w})=>passFilter(w));
+    if(!list.length){ box.innerHTML=`<div class="empty">Nothing to show.</div>`; return; }
+    box.innerHTML=list.map(({w,i})=>{
+      const tier=weekTier(w), ts=TIER_STYLE[tier];
+      const place=[w.city,w.country].filter(Boolean).join(", ");
+      return `<div style="background:${ts.bg==="transparent"?"var(--panel)":ts.bg}; border:1px solid ${tier==="Off"?"var(--line)":ts.ac+"55"}; border-left:5px solid ${ts.ac}; border-radius:10px; padding:11px 13px; margin-bottom:8px">
+        <div style="display:flex; justify-content:space-between; gap:10px; align-items:baseline">
+          <span style="font-size:11px; color:${tier==="Off"?"var(--muted)":ts.ac}; font-weight:700">WK ${w.week}${ts.badge?' · '+ts.badge:''}</span>
+          <span style="font-size:11px; color:var(--muted); white-space:nowrap">${fmt(w.start_date)} – ${fmt(w.end_date)}</span>
+        </div>
+        <div style="font-size:15px; font-weight:700; margin-top:3px; color:${tier==="Off"||tier==="Unknown"?"var(--ink)":ts.ac}">${w.tournament?esc(w.tournament):'<span style="color:var(--faint); font-weight:400">'+esc(w.status)+'</span>'}</div>
+        ${w.course?`<div style="font-size:12px; color:var(--muted)">${esc(w.course)}</div>`:""}
+        ${place?`<div style="font-size:12px; color:var(--faint); margin-top:2px">${esc(place)}</div>`:""}
+        ${canEdit?`<button class="btn btn-ghost btn-sm cedit" data-i="${i}" style="margin-top:9px; width:100%">Edit week</button>`:""}
+      </div>`;
+    }).join("");
+    box.querySelectorAll(".cedit").forEach(b=>b.onclick=()=>editWeek(+b.dataset.i));
+  }
+
+  /* ---- mobile: edit one week in a sheet ---- */
+  function editWeek(i){
+    const w=rows[i];
+    const wrap=document.createElement("div"); wrap.className="cmodal";
+    wrap.innerHTML=`<div class="cbox">
+      <div class="chead"><div><b>Week ${w.week}</b><div class="who">${fmt(w.start_date)} – ${fmt(w.end_date)}</div></div>
+        <button class="cx" id="ewx">×</button></div>
+      <div class="clist" style="padding:14px 16px">
+        <div class="field"><label class="mini">Status</label>
+          <select id="ew-status">${["Tournament","Off","Unknown"].map(o=>`<option ${o===w.status?"selected":""}>${o}</option>`).join("")}</select></div>
+        <div class="field"><label class="mini">Tournament</label><input id="ew-tournament" value="${esc(w.tournament||"")}"></div>
+        <div class="field"><label class="mini">Course</label><input id="ew-course" value="${esc(w.course||"")}"></div>
+        <div class="grid2">
+          <div><label class="mini">City</label><input id="ew-city" value="${esc(w.city||"")}"></div>
+          <div><label class="mini">Country</label><input id="ew-country" value="${esc(w.country||"")}"></div>
+        </div>
+      </div>
+      <div class="cfoot"><button class="btn btn-ghost btn-sm" id="ewdel">Delete week</button>
+        <button class="btn btn-primary btn-sm" id="ewok" style="margin-left:auto">Done</button></div>
+    </div>`;
+    document.body.appendChild(wrap);
+    const close=()=>wrap.remove();
+    wrap.onclick=e=>{ if(e.target===wrap) close(); };
+    document.getElementById("ewx").onclick=close;
+    document.getElementById("ewok").onclick=()=>{
+      ["status","tournament","course","city","country"].forEach(f=>{
+        rows[i][f]=document.getElementById("ew-"+f).value;
+      });
+      rows[i]._dirty=true;
+      const st=document.getElementById("sstate"); if(st) st.textContent="Unsaved changes";
+      close(); drawSeason();
+    };
+    document.getElementById("ewdel").onclick=async()=>{
+      if(!confirm("Remove week "+w.week+"?")) return;
+      if(w.id) await sb.from("season_weeks").delete().eq("id",w.id);
+      rows.splice(i,1); close(); drawSeason();
+    };
+  }
+
+  document.querySelectorAll(".sfil").forEach(b=>b.onclick=()=>{
+    seasonFilter=b.dataset.f;
+    document.querySelectorAll(".sfil").forEach(x=>x.classList.toggle("on",x===b));
+    drawSeason();
+  });
+
   drawSeason();
 
   if(canEdit){
@@ -1209,6 +1335,299 @@ async function teamScreen(v){
   box.querySelectorAll(".rowdel").forEach(b=>b.onclick=async()=>{
     await sb.from("player_viewers").delete().eq("id",b.dataset.id); teamScreen(v);
   });
+}
+
+
+/* ============================================================
+   12. RESULTS — Data Golf import + performance views
+   ============================================================ */
+const DG_BASE = "https://feeds.datagolf.com";
+function sgColor(v){ if(v==null) return "var(--muted)"; return v>=0.5?"#6fd8ab":v>=0?"#c3f53c":v>=-0.5?"#e0a26f":"#e06f6f"; }
+function sgFmt(v){ return v==null?"—":((v>0?"+":"")+Number(v).toFixed(2)); }
+
+let resultsView = "list";
+
+async function resultsScreen(v){
+  const pid = me.role==="player" ? me.id : activePlayerId;
+  if(!pid){ v.innerHTML=`<div class="empty">No player linked.</div>`; return; }
+  const isOwner = me.role==="player";
+
+  let settings=null;
+  if(isOwner){
+    const {data}=await sb.from("app_settings").select("*").eq("player_id",me.id).maybeSingle();
+    settings=data;
+  }
+  const {data:results}=await sb.from("dg_results").select("*")
+    .eq("player_id",pid).order("start_date",{ascending:false});
+
+  v.innerHTML=`
+    <div class="daybar">
+      <button class="btn btn-ghost btn-sm rv ${resultsView==="list"?"on":""}" data-v="list">Tournaments</button>
+      <button class="btn btn-ghost btn-sm rv ${resultsView==="corr"?"on":""}" data-v="corr">Practice vs performance</button>
+      ${isOwner?`<button class="btn btn-ghost btn-sm" id="dgsetup" style="margin-left:auto">${settings?.dg_key?"Data Golf ⚙":"Connect Data Golf"}</button>`:""}
+      ${isOwner&&settings?.dg_key?`<button class="btn btn-primary btn-sm" id="dgrefresh">Refresh</button>`:""}
+    </div>
+    <div id="resbody"></div>`;
+
+  v.querySelectorAll(".rv").forEach(b=>b.onclick=()=>{ resultsView=b.dataset.v; resultsScreen(v); });
+  if(isOwner){
+    document.getElementById("dgsetup").onclick=()=>dgSetup(settings,v);
+    const rf=document.getElementById("dgrefresh");
+    if(rf) rf.onclick=()=>dgImport(settings,v);
+  }
+
+  const body=document.getElementById("resbody");
+  if(!results?.length){
+    body.innerHTML=`<div class="empty">${isOwner?"No results yet. Connect Data Golf and hit Refresh to pull your tournament history.":"No results imported yet."}</div>`;
+    return;
+  }
+  if(resultsView==="list") renderResultsList(body,results,pid);
+  else renderCorrelation(body,results,pid);
+}
+
+/* ---- setup: key + player id ---- */
+async function dgSetup(settings,v){
+  const wrap=document.createElement("div"); wrap.className="cmodal";
+  wrap.innerHTML=`<div class="cbox">
+    <div class="chead"><div><b>Data Golf</b><div class="who">Your key is stored privately — the team never sees it</div></div>
+      <button class="cx" id="dgx">×</button></div>
+    <div class="clist" style="padding:14px 16px">
+      <div class="field"><label class="mini">API key</label>
+        <input id="dg-key" value="${esc(settings?.dg_key||"")}" placeholder="paste your key"></div>
+      <div class="field"><label class="mini">Your name (as Data Golf lists it)</label>
+        <input id="dg-name" value="${esc(settings?.dg_name||me.full_name||"")}" placeholder="Fitzpatrick, Matt"></div>
+      ${settings?.dg_id?`<div style="font-size:12px; color:var(--muted)">Matched to Data Golf ID <b style="color:var(--blood-2)">${settings.dg_id}</b></div>`:
+        `<div style="font-size:12px; color:var(--muted)">Your ID will be found automatically from your name.</div>`}
+      <div id="dg-msg" style="margin-top:10px"></div>
+    </div>
+    <div class="cfoot"><button class="btn btn-primary btn-sm" id="dg-save" style="width:100%">Save &amp; find my ID</button></div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  document.getElementById("dgx").onclick=close;
+
+  document.getElementById("dg-save").onclick=async()=>{
+    const key=val("dg-key"), nm=val("dg-name");
+    const msg=document.getElementById("dg-msg");
+    if(!key){ msg.innerHTML=`<div class="err">Paste your API key first.</div>`; return; }
+    msg.innerHTML=`<div class="who">Looking you up…</div>`;
+    try{
+      const r=await fetch(`${DG_BASE}/get-player-list?file_format=json&key=${encodeURIComponent(key)}`);
+      if(!r.ok) throw new Error("Data Golf rejected the key (status "+r.status+")");
+      const list=await r.json();
+      const arr=Array.isArray(list)?list:(list.players||[]);
+      const norm=x=>String(x||"").toLowerCase().replace(/[^a-z]/g,"");
+      const target=norm(nm);
+      let hit=arr.find(p=>norm(p.player_name)===target);
+      if(!hit){
+        const parts=nm.split(/[\s,]+/).filter(Boolean).map(norm);
+        hit=arr.find(p=>{ const n=norm(p.player_name); return parts.length>1 && parts.every(x=>n.includes(x)); });
+      }
+      if(!hit){ msg.innerHTML=`<div class="err">Couldn't find that name. Data Golf usually lists players as "Surname, First" — try that format.</div>`; return; }
+      const {error}=await sb.from("app_settings").upsert({
+        player_id:me.id, dg_key:key, dg_id:hit.dg_id, dg_name:hit.player_name, updated_at:new Date().toISOString() });
+      if(error){ msg.innerHTML=`<div class="err">${esc(error.message)}</div>`; return; }
+      msg.innerHTML=`<div style="color:var(--blood-2); font-size:13px">Matched: ${esc(hit.player_name)} (ID ${hit.dg_id})</div>`;
+      flash("Connected");
+      setTimeout(()=>{ close(); resultsScreen(v); },900);
+    }catch(e){
+      msg.innerHTML=`<div class="err">${esc(e.message)}</div>`;
+    }
+  };
+}
+
+/* ---- import: pull rounds, aggregate to events ---- */
+async function dgImport(settings,v){
+  if(!settings?.dg_key || !settings?.dg_id){ flash("Connect Data Golf first"); return; }
+  const body=document.getElementById("resbody");
+  const thisYear=new Date().getFullYear();
+  const years=[]; for(let y=thisYear; y>=thisYear-7; y--) years.push(y);
+  const tours=["pga","euro"];
+  let imported=0, failed=0;
+
+  body.innerHTML=`<div class="load">Importing — this takes a minute</div>`;
+  const prog=(m)=>{ body.innerHTML=`<div class="load">${m}</div>`; };
+
+  for(const yr of years){
+    for(const tour of tours){
+      prog(`Fetching ${tour.toUpperCase()} ${yr}…`);
+      try{
+        const url=`${DG_BASE}/historical-raw-data/rounds?tour=${tour}&event_id=all&year=${yr}&file_format=json&key=${encodeURIComponent(settings.dg_key)}`;
+        const r=await fetch(url);
+        if(!r.ok){ failed++; continue; }
+        const json=await r.json();
+        const events=Array.isArray(json)?json:(json.events||json.data||[]);
+        for(const ev of events){
+          const scores=ev.scores||ev.players||[];
+          const mine=scores.filter(p=>+p.dg_id===+settings.dg_id);
+          if(!mine.length) continue;
+          const rounds=[];
+          mine.forEach(p=>{
+            [1,2,3,4].forEach(n=>{
+              const rd=p["round_"+n];
+              if(rd && (rd.score!=null || rd.sg_total!=null)) rounds.push({n, ...rd});
+            });
+            if(!rounds.length && p.score!=null) rounds.push({n:1, ...p});
+          });
+          if(!rounds.length) continue;
+          const avg=f=>{ const xs=rounds.map(r=>r[f]).filter(x=>x!=null&&!isNaN(x)).map(Number);
+                         return xs.length? xs.reduce((a,b)=>a+b,0)/xs.length : null; };
+          const fin=mine[0].fin_text || mine[0].finish || null;
+          const payload={
+            player_id:me.id, event_id:ev.event_id??ev.event_num??null,
+            event_name:ev.event_name||ev.event||"Event", course:ev.course_name||ev.course||null,
+            tour, year:yr, start_date:ev.event_completed||ev.date||null,
+            finish:fin, rounds:rounds.length,
+            sg_ott:avg("sg_ott"), sg_app:avg("sg_app"), sg_arg:avg("sg_arg"),
+            sg_putt:avg("sg_putt"), sg_t2g:avg("sg_t2g"), sg_total:avg("sg_total"),
+            driving_dist:avg("driving_dist"), driving_acc:avg("driving_acc"),
+            gir:avg("gir"), scrambling:avg("scrambling")
+          };
+          if(payload.event_id==null) continue;
+          const {error}=await sb.from("dg_results").upsert(payload,{onConflict:"player_id,event_id,year"});
+          if(!error){
+            imported++;
+            for(const rd of rounds){
+              await sb.from("dg_rounds").upsert({
+                player_id:me.id, event_id:payload.event_id, year:yr, round_num:rd.n,
+                score:rd.score??null, sg_ott:rd.sg_ott??null, sg_app:rd.sg_app??null,
+                sg_arg:rd.sg_arg??null, sg_putt:rd.sg_putt??null, sg_total:rd.sg_total??null
+              },{onConflict:"player_id,event_id,year,round_num"});
+            }
+          }
+        }
+      }catch(e){ failed++; }
+      await new Promise(r=>setTimeout(r,1400)); // stay under 45 req/min
+    }
+  }
+  await sb.from("app_settings").update({last_import:new Date().toISOString()}).eq("player_id",me.id);
+  flash(imported?`Imported ${imported} events`:"Nothing new found");
+  resultsScreen(v);
+}
+
+/* ---- view: tournament list + detail ---- */
+function renderResultsList(box,results,pid){
+  box.innerHTML=results.map((r,i)=>{
+    const tier = MAJOR_RE.test((r.event_name||"").trim()) ? "Major"
+               : SIGNATURE_RE.test(r.event_name||"") ? "Signature" : "Event";
+    const ts=TIER_STYLE[tier];
+    return `<div class="dgrow" data-i="${i}" style="background:${ts.row}; border:1px solid ${ts.ac}44; border-left:5px solid ${ts.ac}; border-radius:10px; padding:11px 13px; margin-bottom:8px; cursor:pointer">
+      <div style="display:flex; justify-content:space-between; gap:10px; align-items:baseline; flex-wrap:wrap">
+        <span style="font-size:11px; color:${ts.ac}; font-weight:700">${r.year}${ts.badge?" · "+ts.badge:""}</span>
+        <span style="font-size:11px; color:var(--muted)">${esc(r.course||"")}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center; margin-top:3px; flex-wrap:wrap">
+        <span style="font-size:15px; font-weight:700; color:${ts.ac}">${esc(r.event_name||"")}</span>
+        <span style="display:flex; gap:12px; align-items:center">
+          <span style="font-size:15px; font-weight:800; color:var(--ink)">${esc(r.finish||"—")}</span>
+          <span style="font-size:13px; font-weight:800; color:${sgColor(r.sg_total)}">${sgFmt(r.sg_total)}</span>
+        </span>
+      </div>
+    </div>`;
+  }).join("");
+  box.querySelectorAll(".dgrow").forEach(el=>el.onclick=()=>showResult(results[+el.dataset.i],pid));
+}
+
+async function showResult(r,pid){
+  const {data:rounds}=await sb.from("dg_rounds").select("*")
+    .eq("player_id",pid).eq("event_id",r.event_id).eq("year",r.year).order("round_num");
+  const cats=[["Off the tee",r.sg_ott],["Approach",r.sg_app],["Around green",r.sg_arg],["Putting",r.sg_putt]];
+  const max=Math.max(1, ...cats.map(c=>Math.abs(+c[1]||0)));
+  const wrap=document.createElement("div"); wrap.className="cmodal";
+  wrap.innerHTML=`<div class="cbox">
+    <div class="chead">
+      <div><b>${esc(r.event_name||"")}</b>
+        <div class="who">${esc(r.course||"")} · ${r.year} · finished ${esc(r.finish||"—")}</div></div>
+      <button class="cx" id="rx">×</button></div>
+    <div class="clist" style="padding:14px 16px">
+      ${cats.map(c=>{
+        const val=+c[1]||0, pct=Math.min(Math.abs(val)/max*50,50), left=val<0?50-pct:50;
+        return `<div style="margin-bottom:13px">
+          <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px">
+            <span style="color:var(--muted)">${c[0]}</span>
+            <span style="color:${sgColor(c[1])}; font-weight:800">${sgFmt(c[1])}</span></div>
+          <div style="position:relative; height:9px; background:var(--panel-2); border-radius:2px">
+            <div style="position:absolute; left:50%; top:-2px; bottom:-2px; width:1px; background:var(--line)"></div>
+            <div style="position:absolute; left:${left}%; width:${pct}%; top:0; bottom:0; background:${sgColor(c[1])}; border-radius:2px"></div>
+          </div></div>`;
+      }).join("")}
+      <div style="border-top:1px solid var(--line); padding-top:10px; display:flex; justify-content:space-between; font-size:14px">
+        <b>Total</b><b style="color:${sgColor(r.sg_total)}">${sgFmt(r.sg_total)}</b></div>
+      ${rounds?.length?`
+        <div style="margin-top:14px">
+          <div class="mini">By round</div>
+          <table style="width:100%; border-collapse:collapse; font-size:12px">
+            <tr style="color:var(--muted)"><th style="text-align:left; padding:4px 0">Rd</th><th>Score</th><th>OTT</th><th>APP</th><th>ARG</th><th>PUTT</th></tr>
+            ${rounds.map(x=>`<tr style="border-top:1px solid var(--line)">
+              <td style="padding:5px 0">${x.round_num}</td>
+              <td style="text-align:center">${x.score??"—"}</td>
+              <td style="text-align:center; color:${sgColor(x.sg_ott)}">${sgFmt(x.sg_ott)}</td>
+              <td style="text-align:center; color:${sgColor(x.sg_app)}">${sgFmt(x.sg_app)}</td>
+              <td style="text-align:center; color:${sgColor(x.sg_arg)}">${sgFmt(x.sg_arg)}</td>
+              <td style="text-align:center; color:${sgColor(x.sg_putt)}">${sgFmt(x.sg_putt)}</td>
+            </tr>`).join("")}
+          </table></div>`:""}
+    </div></div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  document.getElementById("rx").onclick=close;
+}
+
+/* ---- view: practice vs performance ---- */
+async function renderCorrelation(box,results,pid){
+  box.innerHTML=`<div class="load">Working out the correlation</div>`;
+  const recent=results.slice(0,8).filter(r=>r.start_date);
+  if(!recent.length){ box.innerHTML=`<div class="empty">Not enough results yet.</div>`; return; }
+  const from=recent[recent.length-1].start_date;
+  const {data:sess}=await sb.from("sessions").select("balls, minutes, drills(category)")
+    .eq("player_id",pid).gte("logged_on",from);
+
+  const MAP={Driving:"sg_ott",Approach:"sg_app","Short Game":"sg_arg",Putting:"sg_putt"};
+  const rows=Object.keys(MAP).map(cat=>{
+    const balls=(sess||[]).filter(s=>s.drills?.category===cat).reduce((a,s)=>a+(s.balls||0),0);
+    const mins=(sess||[]).filter(s=>s.drills?.category===cat).reduce((a,s)=>a+(+s.minutes||0),0);
+    const f=MAP[cat];
+    const vals=recent.map(r=>r[f]).filter(x=>x!=null).map(Number);
+    const sg=vals.length? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+    const half=Math.ceil(vals.length/2);
+    const recentAvg=vals.slice(0,half).reduce((a,b)=>a+b,0)/(half||1);
+    const earlierAvg=vals.slice(half).length? vals.slice(half).reduce((a,b)=>a+b,0)/vals.slice(half).length : recentAvg;
+    const trend = recentAvg-earlierAvg > 0.1 ? "up" : recentAvg-earlierAvg < -0.1 ? "down" : "flat";
+    return {cat,balls,mins,sg,trend};
+  });
+  const maxB=Math.max(1,...rows.map(r=>r.balls));
+
+  const best=rows.filter(r=>r.sg!=null).sort((a,b)=>b.sg-a.sg)[0];
+  const worst=rows.filter(r=>r.sg!=null).sort((a,b)=>a.sg-b.sg)[0];
+  const mostPractised=rows.slice().sort((a,b)=>b.balls-a.balls)[0];
+
+  box.innerHTML=`
+    <p style="font-size:12px; color:var(--muted); margin:0 0 12px">
+      Practice logged since ${from} against average strokes gained over your last ${recent.length} events.</p>
+    <div class="card">
+      ${rows.map(r=>{
+        const arrow=r.trend==="up"?"↑":r.trend==="down"?"↓":"→";
+        return `<div style="margin-bottom:16px">
+          <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; margin-bottom:5px">
+            <span style="font-size:14px; font-weight:700">${r.cat}</span>
+            <span style="font-size:12px; color:var(--muted)">${r.balls} balls · ${Math.round(r.mins)}m ·
+              <b style="color:${sgColor(r.sg)}">${sgFmt(r.sg)} SG ${arrow}</b></span>
+          </div>
+          <div style="height:8px; background:var(--panel-2); border-radius:2px; overflow:hidden">
+            <div style="height:100%; width:${Math.round(r.balls/maxB*100)}%; background:${sgColor(r.sg)}; opacity:.85"></div>
+          </div></div>`;
+      }).join("")}
+    </div>
+    ${best&&worst?`<div class="card" style="margin-top:12px">
+      <div class="mini">What it shows</div>
+      <div style="font-size:13px; color:var(--muted); line-height:1.6">
+        Strongest: <b style="color:${sgColor(best.sg)}">${best.cat} ${sgFmt(best.sg)}</b>.
+        Weakest: <b style="color:${sgColor(worst.sg)}">${worst.cat} ${sgFmt(worst.sg)}</b>.
+        Most practice volume went to <b style="color:var(--ink)">${mostPractised.cat}</b> (${mostPractised.balls} balls).
+        ${worst.balls < mostPractised.balls/2 ? `Your weakest area has had roughly ${Math.round(worst.balls/Math.max(mostPractised.balls,1)*100)}% of the volume your most-practised one has.` : ""}
+      </div></div>`:""}`;
 }
 
 /* ============================================================

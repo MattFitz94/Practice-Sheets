@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#141920" />
 <link rel="manifest" href="manifest.json" />
-<title>Practice Sheets</title>
+<title>Practice Schedule</title>
 <style>
   :root{
     --bg:#141920; --panel:#1b2027; --panel-2:#232a33; --line:#333c46;
@@ -204,9 +204,9 @@ function authScreen(mode){
   const signup = mode==="signup";
   app.innerHTML = `
    <div class="auth"><div class="authcard">
-     <p class="kicker">Practice · logged · earned</p>
-     <h1>Practice <em>Sheets</em></h1>
-     <p class="sub">${signup?"Set up your account. Coaches build the plan, players put in the work — same sheet, one source of truth.":"Sign in and get after it."}</p>
+     <p class="kicker">Team Fitz</p>
+     <h1>Practice <em>Schedule</em></h1>
+     <p class="sub">${signup?"Set up your account.":"Sign in."}</p>
      <div id="autherr"></div>
      ${signup?`<div class="field"><label>Your name</label><input id="a-name" placeholder="Matt Fitzpatrick"></div>`:""}
      ${signup?`<div class="field"><label>I am a…</label><select id="a-role"><option value="player">Player</option><option value="coach">Coach</option><option value="viewer">Viewer (view only)</option></select></div>`:""}
@@ -274,7 +274,7 @@ function shell(){
   if(!currentTab) currentTab=tabs[0][0];
   app.innerHTML=`
     <header><div class="wrap">
-      <div class="mark"><div class="bar"></div><div class="brand">Practice <em>Sheets</em></div></div>
+      <div class="mark"><div class="bar"></div><div class="brand">Practice <em>Schedule</em></div></div>
       <div class="whoami">
         <span class="rolechip">${me.role}</span>
         <span>${esc(me.full_name||"")}</span>
@@ -655,6 +655,47 @@ async function weekScreen(v){
    ============================================================ */
 let schedDay = new Date().toISOString().slice(0,10);
 
+/* ---- export a day (or the season) to calendar ---- */
+function icsEscape(t){ return String(t||"").replace(/[\\;,]/g,m=>"\\"+m).replace(/\n/g,"\\n"); }
+function icsStamp(dateStr, timeStr){
+  const t=(timeStr||"00:00").replace(":","");
+  return dateStr.replace(/-/g,"")+"T"+t+"00";
+}
+function downloadICS(filename, events){
+  let out=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Practice Schedule//EN","CALSCALE:GREGORIAN"];
+  events.forEach((e,i)=>{
+    out.push("BEGIN:VEVENT");
+    out.push("UID:ps-"+Date.now()+"-"+i+"@practice");
+    out.push("DTSTAMP:"+new Date().toISOString().replace(/[-:]/g,"").split(".")[0]+"Z");
+    if(e.allDay){
+      out.push("DTSTART;VALUE=DATE:"+e.start.replace(/-/g,""));
+      out.push("DTEND;VALUE=DATE:"+e.end.replace(/-/g,""));
+    } else {
+      out.push("DTSTART:"+icsStamp(e.date,e.start));
+      out.push("DTEND:"+icsStamp(e.date,e.end||e.start));
+    }
+    out.push("SUMMARY:"+icsEscape(e.title));
+    if(e.desc) out.push("DESCRIPTION:"+icsEscape(e.desc));
+    out.push("END:VEVENT");
+  });
+  out.push("END:VCALENDAR");
+  const blob=new Blob([out.join("\r\n")],{type:"text/calendar"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function timeOptions(sel){
+  let out="";
+  for(let h=4; h<24; h++){
+    for(const m of [0,15,30,45]){
+      const t=String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");
+      out+=`<option value="${t}" ${t===sel?"selected":""}>${t}</option>`;
+    }
+  }
+  return out;
+}
+
 function addMins(hhmm, mins){
   if(!hhmm) return "";
   const p=hhmm.split(":"); if(p.length<2) return "";
@@ -682,16 +723,20 @@ async function scheduleScreen(v){
       <div class="dsel"><span class="who">Day</span><input type="date" id="sday" value="${schedDay}"></div>
       <button class="btn btn-ghost btn-sm" id="snext">›</button>
       <button class="btn btn-ghost btn-sm" id="stoday">Today</button>
-      <span class="who" style="margin-left:auto">${canEdit?"Your schedule — only you can edit":"Read only"}</span>
+      <button class="btn btn-ghost btn-sm" id="sexport">Add to calendar</button>
+      <span class="who" style="margin-left:auto">${canEdit?"Only you can edit":"Read only"}</span>
     </div>
     <div class="gridwrap" style="min-width:0"><div id="slist"></div></div>
     ${canEdit?`
     <div class="card" style="margin-top:14px">
       <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:12px">Add to the day</h3>
       <div class="grid3">
-        <div><label class="mini">Start</label><input id="itime" type="time" value="09:00"></div>
+        <div><label class="mini">Start</label><select id="itime">${timeOptions("09:00")}</select></div>
         <div><label class="mini">Type</label><select id="ikind"><option value="practice">Practice</option><option value="media">Media</option><option value="other">Other</option></select></div>
-        <div><label class="mini">Minutes</label><input id="imins" type="number" placeholder="45"></div>
+        <div><label class="mini">Length</label><select id="imins">
+          <option value="">—</option>
+          ${[15,30,45,60,75,90,120,150,180,240].map(m=>`<option value="${m}">${m>=60?(m/60)+"h"+(m%60?" "+(m%60)+"m":""):m+"m"}</option>`).join("")}
+        </select></div>
       </div>
       <div class="field" style="margin-top:8px"><label class="mini">Label</label><input id="ilabel" placeholder="e.g. Sky Sports interview / Lunch"></div>
       <div class="inline" style="margin-top:10px">
@@ -706,6 +751,16 @@ async function scheduleScreen(v){
   document.getElementById("snext").onclick=()=>shift(1);
   document.getElementById("stoday").onclick=()=>{ schedDay=new Date().toISOString().slice(0,10); scheduleScreen(v); };
   document.getElementById("sday").onchange=e=>{ schedDay=e.target.value; scheduleScreen(v); };
+  document.getElementById("sexport").onclick=()=>{
+    if(!items?.length){ flash("Nothing to export"); return; }
+    const evs=items.map(it=>{
+      const mins = it.kind==="practice" ? practiceMins : (it.duration_mins||0);
+      return { date:schedDay, start:it.start_time||"09:00", end:addMins(it.start_time,mins),
+               title:(it.label||it.kind), desc: it.kind==="practice"&&practiceList.length?practiceList.join(", "):"" };
+    });
+    downloadICS("schedule-"+schedDay+".ics", evs);
+    flash("Calendar file downloaded");
+  };
 
   const kindPill={media:"p-Performance",practice:"p-Putting",other:"p-Technical"};
   const list=document.getElementById("slist");
@@ -730,11 +785,14 @@ async function scheduleScreen(v){
           ${isPractice&&practiceList.length?`<div style="font-size:12px; color:var(--muted); margin-top:5px; line-height:1.5">${practiceList.join("<br>")}</div>`:""}
           ${isPractice&&!practiceList.length?`<div style="font-size:12px; color:var(--faint); margin-top:4px">No drills on the sheet for this day yet</div>`:""}
         </div>
-        ${canEdit?`<button class="rowdel" data-id="${it.id}" title="Remove">×</button>`:""}
+        ${canEdit?`<button class="rowdel" data-id="${it.id}" title="Remove from day" style="font-size:20px; padding:0 8px; align-self:center">×</button>`:""}
       </div>`;
     }).join("");
     list.querySelectorAll(".rowdel").forEach(b=>b.onclick=async()=>{
-      await sb.from("schedule_items").delete().eq("id",b.dataset.id); scheduleScreen(v);
+      if(!confirm("Remove this from the day?")) return;
+      const {error}=await sb.from("schedule_items").delete().eq("id",b.dataset.id);
+      if(error){ flash(error.message); return; }
+      flash("Removed"); scheduleScreen(v);
     });
   }
 
@@ -781,8 +839,11 @@ async function seasonScreen(v){
           ${yrList.map(y=>`<option ${y===seasonYear?'selected':''}>${y}</option>`).join("")}
         </select></div>
       ${canEdit?`<button class="btn btn-ghost btn-sm" id="addyear">+ Add year</button>`:""}
-      <span class="who" style="margin-left:auto">
-        <b>${ev}</b> events · ${off} off · ${unk} unknown
+      <button class="btn btn-ghost btn-sm" id="seasonexport">Add year to calendar</button>
+      <span class="who" style="margin-left:auto; display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+        <span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--blood-2);margin-right:5px"></i>${ev} events</span>
+        <span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--faint);margin-right:5px"></i>${off} off</span>
+        <span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#7a6a2e;margin-right:5px"></i>${unk} unknown</span>
       </span>
     </div>
     <div class="gridwrap">
@@ -802,6 +863,16 @@ async function seasonScreen(v){
       </div></div>`:""}`;
 
   document.getElementById("yrsel").onchange=e=>{ seasonYear=+e.target.value; seasonScreen(v); };
+  document.getElementById("seasonexport").onclick=()=>{
+    const evs=(weeks||[]).filter(w=>w.status==="Tournament"&&w.start_date).map(w=>({
+      allDay:true, start:w.start_date, end:w.end_date||w.start_date,
+      title:w.tournament||"Tournament",
+      desc:[w.course,w.city,w.country].filter(Boolean).join(", ")
+    }));
+    if(!evs.length){ flash("No tournaments to export"); return; }
+    downloadICS("season-"+seasonYear+".ics", evs);
+    flash("Calendar file downloaded");
+  };
 
   let rows=(weeks||[]).map(w=>({...w,_dirty:false}));
   function drawSeason(){
@@ -811,8 +882,12 @@ async function seasonScreen(v){
       const ti=(f,val,w2)=>canEdit
         ? `<input class="cell-txt" data-i="${i}" data-f="${f}" value="${esc(val||"")}" style="min-width:${w2||110}px">`
         : `<span class="auto" style="text-align:left;display:block">${val?esc(val):"—"}</span>`;
+      const stripe = w.status==="Tournament" ? "var(--blood-2)" : w.status==="Off" ? "var(--faint)" : "#7a6a2e";
+      const rowBg  = w.status==="Tournament" ? "rgba(195,245,60,.05)" : "transparent";
+      const isMajor = /MASTERS|USPGA|US OPEN|THE OPEN|Ryder Cup|Players Championship/i.test(w.tournament||"");
+      tr.style.background=rowBg;
       tr.innerHTML=`
-        <td style="text-align:center; color:var(--muted); font-weight:700">${w.week}</td>
+        <td style="text-align:center; color:var(--muted); font-weight:700; border-left:4px solid ${stripe}">${w.week}${isMajor?'<div style="font-size:9px; color:var(--blood-2); letter-spacing:.06em">MAJOR</div>':''}</td>
         <td style="text-align:center; font-size:12px; color:var(--muted); white-space:nowrap">${fmt(w.start_date)} – ${fmt(w.end_date)}</td>
         <td style="text-align:center">${ti("country",w.country,90)}</td>
         <td>${ti("city",w.city,110)}</td>

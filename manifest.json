@@ -1,6 +1,6 @@
 {
-  "name": "Practice Sheets",
-  "short_name": "Practice Sheets",
+  "name": "Practice Schedule",
+  "short_name": "Practice Schedule",
   "description": "Coach and player share one practice sheet.",
   "start_url": "./index.html",
   "display": "standalone",

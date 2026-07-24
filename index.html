@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#141920" />
 <link rel="manifest" href="manifest.json" />
-<title>THE WORK</title>
+<title>Practice Sheets</title>
 <style>
   :root{
     --bg:#141920; --panel:#1b2027; --panel-2:#232a33; --line:#333c46;
@@ -192,7 +192,7 @@ function authScreen(mode){
   app.innerHTML = `
    <div class="auth"><div class="authcard">
      <p class="kicker">Practice · logged · earned</p>
-     <h1>The <em>Work</em></h1>
+     <h1>Practice <em>Sheets</em></h1>
      <p class="sub">${signup?"Set up your account. Coaches build the plan, players put in the work — same sheet, one source of truth.":"Sign in and get after it."}</p>
      <div id="autherr"></div>
      ${signup?`<div class="field"><label>Your name</label><input id="a-name" placeholder="Matt Fitzpatrick"></div>`:""}
@@ -256,7 +256,7 @@ function shell(){
   if(!currentTab) currentTab=tabs[0][0];
   app.innerHTML=`
     <header><div class="wrap">
-      <div class="mark"><div class="bar"></div><div class="brand">The <em>Work</em></div></div>
+      <div class="mark"><div class="bar"></div><div class="brand">Practice <em>Sheets</em></div></div>
       <div class="whoami">
         <span class="rolechip">${me.role}</span>
         <span>${esc(me.full_name||"")}</span>

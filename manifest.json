@@ -1,7 +1,7 @@
 {
-  "name": "The Work — golf practice",
-  "short_name": "The Work",
-  "description": "Coach and player share one practice sheet. Log the work.",
+  "name": "Practice Sheets",
+  "short_name": "Practice Sheets",
+  "description": "Coach and player share one practice sheet.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#141920",

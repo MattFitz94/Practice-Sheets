@@ -163,7 +163,11 @@
   .flash.show{opacity:1}
   .load{text-align:center; padding:44px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; font-size:12px}
   .seasonmob{display:none}
-  .sfil.on,.cwin.on{background:var(--blood-2); color:var(--lime-ink); border-color:var(--blood-2)}
+  .sfil.on,.cwin.on,.rv.on,.tcat.on{background:var(--blood-2); color:var(--lime-ink); border-color:var(--blood-2)}
+  .heatcell{border-radius:4px; padding:7px 4px; text-align:center; color:#0b0b0c; font-weight:800; font-size:11px}
+  .rvbar{overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; flex-wrap:nowrap}
+  .rvbar .btn{flex:0 0 auto; white-space:nowrap}
+  .rvbar::-webkit-scrollbar{display:none}
 
   @media (max-width:520px){
     .stat-row{grid-template-columns:repeat(2,1fr)}
@@ -1379,9 +1383,10 @@ async function resultsScreen(v){
     .eq("player_id",pid).order("start_date",{ascending:false});
 
   v.innerHTML=`
-    <div class="daybar">
-      <button class="btn btn-ghost btn-sm rv ${resultsView==="list"?"on":""}" data-v="list">Tournaments</button>
-      <button class="btn btn-ghost btn-sm rv ${resultsView==="corr"?"on":""}" data-v="corr">Practice vs performance</button>
+    <div class="daybar rvbar">
+      ${[["list","Tournaments"],["heat","Heatmap"],["trend","Trend"],["form","Form"],
+         ["lag","Practice lag"],["tier","Majors vs rest"],["corr","Practice vs performance"]]
+        .map(t=>`<button class="btn btn-ghost btn-sm rv ${resultsView===t[0]?"on":""}" data-v="${t[0]}">${t[1]}</button>`).join("")}
       ${isOwner?`<button class="btn btn-ghost btn-sm" id="dgsetup" style="margin-left:auto">Data Golf ⚙</button>`:""}
       ${isOwner&&settings?.dg_id?`<button class="btn btn-primary btn-sm" id="dgrefresh">Refresh</button>`:""}
     </div>
@@ -1400,6 +1405,11 @@ async function resultsScreen(v){
     return;
   }
   if(resultsView==="list") renderResultsList(body,results,pid);
+  else if(resultsView==="heat") renderHeatmap(body,results);
+  else if(resultsView==="trend") renderTrend(body,results);
+  else if(resultsView==="form") renderForm(body,results);
+  else if(resultsView==="lag") renderLag(body,results,pid);
+  else if(resultsView==="tier") renderTier(body,results);
   else renderCorrelation(body,results,pid);
 }
 
@@ -1611,6 +1621,220 @@ async function showResult(r,pid){
   const close=()=>wrap.remove();
   wrap.onclick=e=>{ if(e.target===wrap) close(); };
   document.getElementById("rx").onclick=close;
+}
+
+
+/* ---- shared helpers for the results views ---- */
+const SGCATS=[["sg_ott","Off tee"],["sg_app","Approach"],["sg_arg","Around grn"],["sg_putt","Putting"]];
+let trendCat="sg_app";
+let lagWeeks=4;
+let lagCat="sg_app";
+const PRACTICE_FOR={sg_ott:"Driving", sg_app:"Approach", sg_arg:"Short Game", sg_putt:"Putting"};
+
+function sgOpacity(v){ return Math.min(Math.abs(+v||0)/1.2,1)*0.75+0.15; }
+function evLabel(r){ return (r.event_name||"").replace(/Championship|Invitational|Tournament/gi,"").trim().slice(0,14); }
+
+/* ---- 1. HEATMAP ---- */
+function renderHeatmap(box,results){
+  const rows=results.slice(0,30);
+  if(!rows.length){ box.innerHTML=`<div class="empty">No results yet.</div>`; return; }
+  box.innerHTML=`
+    <p style="font-size:12px; color:var(--muted); margin:0 0 10px">
+      Every event against every category. Green gains strokes, red loses them.</p>
+    <div class="gridwrap" style="padding:2px">
+      <table class="grid" style="min-width:620px">
+        <thead><tr><th class="l">Event</th>
+          ${SGCATS.map(c=>`<th>${c[1]}</th>`).join("")}
+          <th>Total</th><th>Finish</th></tr></thead>
+        <tbody>
+        ${rows.map(r=>`<tr>
+          <td style="white-space:nowrap; font-size:12px">${esc(r.event_name||"")}
+            <div style="font-size:10px; color:var(--faint)">${r.year||""}</div></td>
+          ${SGCATS.map(c=>{
+            const v=r[c[0]];
+            return `<td style="padding:3px 4px">${v==null
+              ? `<span class="auto">—</span>`
+              : `<div class="heatcell" style="background:${sgColor(v)}; opacity:${sgOpacity(v).toFixed(2)}">${sgFmt(v)}</div>`}</td>`;
+          }).join("")}
+          <td style="text-align:center; font-weight:800; color:${sgColor(r.sg_total)}">${sgFmt(r.sg_total)}</td>
+          <td style="text-align:center; font-weight:700">${esc(r.finish||"—")}</td>
+        </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+/* ---- 2. TREND ---- */
+function renderTrend(box,results){
+  const rows=results.slice(0,20).filter(r=>r[trendCat]!=null).reverse();
+  if(!rows.length){ box.innerHTML=`<div class="empty">Not enough data yet.</div>`; return; }
+  const vals=rows.map(r=>+r[trendCat]);
+  const max=Math.max(0.6,...vals.map(Math.abs));
+  const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+  const half=Math.ceil(vals.length/2);
+  const firstHalf=vals.slice(0,half).reduce((a,b)=>a+b,0)/half;
+  const secondHalf=vals.slice(half).length?vals.slice(half).reduce((a,b)=>a+b,0)/vals.slice(half).length:firstHalf;
+  const dir=secondHalf-firstHalf;
+
+  box.innerHTML=`
+    <div class="daybar" style="margin-bottom:10px">
+      ${SGCATS.map(c=>`<button class="btn btn-ghost btn-sm tcat ${c[0]===trendCat?"on":""}" data-c="${c[0]}">${c[1]}</button>`).join("")}
+    </div>
+    <div class="stat-row">
+      ${stat(sgFmt(avg),"Average")}
+      ${stat(sgFmt(Math.max(...vals)),"Best")}
+      ${stat(sgFmt(Math.min(...vals)),"Worst")}
+      ${stat((dir>0.05?"↑ up":dir<-0.05?"↓ down":"→ flat"),"Direction")}
+    </div>
+    <div class="card">
+      <div style="display:flex; align-items:flex-end; gap:4px; height:170px; border-bottom:1px solid var(--line)">
+        ${rows.map(r=>{
+          const v=+r[trendCat], h=Math.max(Math.abs(v)/max*100,3);
+          const up=v>=0;
+          return `<div title="${esc(r.event_name||"")} ${sgFmt(v)}" style="flex:1; display:flex; flex-direction:column; justify-content:${up?"flex-end":"flex-start"}; height:100%">
+            <div style="height:${h/2}%; background:${sgColor(v)}; border-radius:${up?"3px 3px 0 0":"0 0 3px 3px"}; opacity:.9"></div>
+          </div>`;
+        }).join("")}
+      </div>
+      <div style="display:flex; gap:4px; margin-top:6px">
+        ${rows.map(r=>`<div style="flex:1; font-size:8px; color:var(--faint); text-align:center; overflow:hidden; white-space:nowrap">${esc(evLabel(r).slice(0,6))}</div>`).join("")}
+      </div>
+    </div>`;
+  box.querySelectorAll(".tcat").forEach(b=>b.onclick=()=>{ trendCat=b.dataset.c; renderTrend(box,results); });
+}
+
+/* ---- 3. FORM GUIDE ---- */
+function renderForm(box,results){
+  const last=results.slice(0,5);
+  if(!last.length){ box.innerHTML=`<div class="empty">No results yet.</div>`; return; }
+  const avg=f=>{ const xs=last.map(r=>r[f]).filter(x=>x!=null).map(Number); return xs.length? xs.reduce((a,b)=>a+b,0)/xs.length : null; };
+  box.innerHTML=`
+    <p style="font-size:12px; color:var(--muted); margin:0 0 12px">Last ${last.length} events — current form.</p>
+    <div class="stat-row">
+      ${SGCATS.map(c=>{
+        const v=avg(c[0]);
+        return `<div class="stat" style="border-left:4px solid ${sgColor(v)}">
+          <div class="n" style="color:${sgColor(v)}">${sgFmt(v)}</div>
+          <div class="l">${c[1]}</div></div>`;
+      }).join("")}
+    </div>
+    <div class="card">
+      ${last.map(r=>`
+        <div class="row-item">
+          <div style="min-width:120px">
+            <div style="font-size:14px; font-weight:600">${esc(evLabel(r))}</div>
+            <div style="font-size:11px; color:var(--faint)">${r.year||""}</div></div>
+          <div style="font-size:15px; font-weight:800; min-width:44px">${esc(r.finish||"—")}</div>
+          <div style="flex:1; display:flex; gap:3px">
+            ${SGCATS.map(c=>{
+              const v=r[c[0]];
+              return `<div title="${c[1]} ${sgFmt(v)}" style="flex:1; height:22px; border-radius:3px; background:${v==null?"var(--panel-2)":sgColor(v)}; opacity:${v==null?.4:sgOpacity(v).toFixed(2)}"></div>`;
+            }).join("")}
+          </div>
+          <div style="font-weight:800; color:${sgColor(r.sg_total)}; min-width:52px; text-align:right">${sgFmt(r.sg_total)}</div>
+        </div>`).join("")}
+    </div>
+    <p style="font-size:11px; color:var(--faint); margin:8px 2px 0">Bars are off tee · approach · around green · putting.</p>`;
+}
+
+/* ---- 4. PRACTICE LAG ---- */
+async function renderLag(box,results,pid){
+  box.innerHTML=`<div class="load">Working out the lag</div>`;
+  const evs=results.filter(r=>r.start_date && r[lagCat]!=null).slice(0,24);
+  if(evs.length<3){ box.innerHTML=`<div class="empty">Need a few more events for this.</div>`; return; }
+
+  const earliest=evs[evs.length-1].start_date;
+  const {data:sess}=await sb.from("sessions").select("balls, logged_on, drills(category)")
+    .eq("player_id",pid).gte("logged_on", new Date(new Date(earliest).getTime()-lagWeeks*7*864e5).toISOString().slice(0,10));
+
+  const wantCat=PRACTICE_FOR[lagCat];
+  const pts=evs.map(r=>{
+    const end=new Date(r.start_date).getTime();
+    const start=end - lagWeeks*7*864e5;
+    const balls=(sess||[]).filter(x=>{
+      if(x.drills?.category!==wantCat) return false;
+      const t=new Date(x.logged_on).getTime();
+      return t>=start && t<end;
+    }).reduce((a,x)=>a+(x.balls||0),0);
+    return {name:evLabel(r), balls, sg:+r[lagCat]};
+  });
+  const maxB=Math.max(1,...pts.map(p=>p.balls));
+  const sgs=pts.map(p=>p.sg);
+  const loSG=Math.min(...sgs), hiSG=Math.max(...sgs), rng=(hiSG-loSG)||1;
+
+  // simple correlation coefficient
+  const n=pts.length;
+  const mx=pts.reduce((a,p)=>a+p.balls,0)/n, my=sgs.reduce((a,b)=>a+b,0)/n;
+  let num=0, dx=0, dy=0;
+  pts.forEach(p=>{ num+=(p.balls-mx)*(p.sg-my); dx+=(p.balls-mx)**2; dy+=(p.sg-my)**2; });
+  const rcoef=(dx&&dy)? num/Math.sqrt(dx*dy) : 0;
+  const strength = Math.abs(rcoef)<0.2?"no clear relationship":Math.abs(rcoef)<0.45?"a weak relationship":"a moderate relationship";
+
+  box.innerHTML=`
+    <div class="daybar" style="margin-bottom:8px">
+      ${SGCATS.map(c=>`<button class="btn btn-ghost btn-sm lcat ${c[0]===lagCat?"on":""}" data-c="${c[0]}">${c[1]}</button>`).join("")}
+    </div>
+    <div class="daybar" style="margin-bottom:10px">
+      <span class="who">Window before event</span>
+      ${[2,4,8].map(w=>`<button class="btn btn-ghost btn-sm lwk ${w===lagWeeks?"on":""}" data-w="${w}">${w} weeks</button>`).join("")}
+    </div>
+    <p style="font-size:12px; color:var(--muted); margin:0 0 10px">
+      ${wantCat} balls hit in the ${lagWeeks} weeks before each event, against ${SGCATS.find(c=>c[0]===lagCat)[1]} in that event.</p>
+    <div class="card">
+      <div style="position:relative; height:230px; border-left:1px solid var(--line); border-bottom:1px solid var(--line); margin-left:34px">
+        ${pts.map(p=>{
+          const x=(p.balls/maxB)*92+2;
+          const y=((p.sg-loSG)/rng)*86+5;
+          return `<div title="${esc(p.name)} · ${p.balls} balls · ${sgFmt(p.sg)}"
+            style="position:absolute; left:${x.toFixed(1)}%; bottom:${y.toFixed(1)}%; width:13px; height:13px; border-radius:50%;
+                   background:${sgColor(p.sg)}; transform:translate(-50%,50%); opacity:.9"></div>`;
+        }).join("")}
+        <span style="position:absolute; left:-32px; top:-6px; font-size:10px; color:var(--faint)">${sgFmt(hiSG)}</span>
+        <span style="position:absolute; left:-32px; bottom:-6px; font-size:10px; color:var(--faint)">${sgFmt(loSG)}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin:6px 0 0 34px; font-size:10px; color:var(--faint)">
+        <span>0 balls</span><span>practice volume →</span><span>${maxB}</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="mini">What it shows</div>
+      <div style="font-size:13px; color:var(--muted); line-height:1.6">
+        Across ${n} events there is <b style="color:var(--ink)">${strength}</b> between ${wantCat.toLowerCase()} volume and ${SGCATS.find(c=>c[0]===lagCat)[1].toLowerCase()} performance (r = ${rcoef.toFixed(2)}).
+        <br><span style="color:var(--faint); font-size:12px">With this few events, treat it as a talking point rather than proof — golf is noisy, and one bad week moves this a long way.</span>
+      </div>
+    </div>`;
+  box.querySelectorAll(".lcat").forEach(b=>b.onclick=()=>{ lagCat=b.dataset.c; renderLag(box,results,pid); });
+  box.querySelectorAll(".lwk").forEach(b=>b.onclick=()=>{ lagWeeks=+b.dataset.w; renderLag(box,results,pid); });
+}
+
+/* ---- 5. MAJORS VS REST ---- */
+function renderTier(box,results){
+  const maj=results.filter(r=>MAJOR_RE.test((r.event_name||"").trim()));
+  const rest=results.filter(r=>!MAJOR_RE.test((r.event_name||"").trim()));
+  if(!maj.length){ box.innerHTML=`<div class="empty">No majors in the imported data yet.</div>`; return; }
+  const avg=(arr,f)=>{ const xs=arr.map(r=>r[f]).filter(x=>x!=null).map(Number); return xs.length? xs.reduce((a,b)=>a+b,0)/xs.length : null; };
+  box.innerHTML=`
+    <p style="font-size:12px; color:var(--muted); margin:0 0 12px">
+      Does the game hold up when it matters most?</p>
+    <div class="gridwrap" style="padding:2px">
+      <table class="grid" style="min-width:420px">
+        <thead><tr><th class="l">Category</th><th>Majors (${maj.length})</th><th>Others (${rest.length})</th><th>Gap</th></tr></thead>
+        <tbody>
+        ${[...SGCATS,["sg_total","Total"]].map(c=>{
+          const m=avg(maj,c[0]), o=avg(rest,c[0]);
+          const gap=(m!=null&&o!=null)?m-o:null;
+          return `<tr>
+            <td style="font-size:13px">${c[1]}</td>
+            <td style="text-align:center; font-weight:800; color:${sgColor(m)}">${sgFmt(m)}</td>
+            <td style="text-align:center; font-weight:800; color:${sgColor(o)}">${sgFmt(o)}</td>
+            <td style="text-align:center; font-weight:700; color:${gap==null?"var(--muted)":gap>=0?"var(--blood-2)":"#e0864f"}">${gap==null?"—":(gap>0?"+":"")+gap.toFixed(2)}</td>
+          </tr>`;
+        }).join("")}
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:12px; color:var(--faint); margin:10px 2px 0">
+      With only ${maj.length} major${maj.length===1?"":"s"} here, one week swings this heavily. Read it loosely.</p>`;
 }
 
 /* ---- view: practice vs performance ---- */

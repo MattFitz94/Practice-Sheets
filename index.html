@@ -1341,7 +1341,24 @@ async function teamScreen(v){
 /* ============================================================
    12. RESULTS — Data Golf import + performance views
    ============================================================ */
-const DG_BASE = "https://feeds.datagolf.com";
+// Data Golf is reached through a Supabase Edge Function (browsers can't call
+// it directly — CORS). The key lives on the server as a secret.
+async function dgCall(payload){
+  const { data:{ session } } = await sb.auth.getSession();
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/datagolf`, {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":`Bearer ${session?.access_token || SUPABASE_ANON_KEY}`,
+      "apikey": SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify(payload)
+  });
+  const txt = await r.text();
+  let js; try{ js = JSON.parse(txt); }catch{ throw new Error("Unexpected reply: "+txt.slice(0,120)); }
+  if(!r.ok || js?.error) throw new Error(js?.error || `Request failed (${r.status})`);
+  return js;
+}
 function sgColor(v){ if(v==null) return "var(--muted)"; return v>=0.5?"#6fd8ab":v>=0?"#c3f53c":v>=-0.5?"#e0a26f":"#e06f6f"; }
 function sgFmt(v){ return v==null?"—":((v>0?"+":"")+Number(v).toFixed(2)); }
 
@@ -1364,8 +1381,8 @@ async function resultsScreen(v){
     <div class="daybar">
       <button class="btn btn-ghost btn-sm rv ${resultsView==="list"?"on":""}" data-v="list">Tournaments</button>
       <button class="btn btn-ghost btn-sm rv ${resultsView==="corr"?"on":""}" data-v="corr">Practice vs performance</button>
-      ${isOwner?`<button class="btn btn-ghost btn-sm" id="dgsetup" style="margin-left:auto">${settings?.dg_key?"Data Golf ⚙":"Connect Data Golf"}</button>`:""}
-      ${isOwner&&settings?.dg_key?`<button class="btn btn-primary btn-sm" id="dgrefresh">Refresh</button>`:""}
+      ${isOwner?`<button class="btn btn-ghost btn-sm" id="dgsetup" style="margin-left:auto">Data Golf ⚙</button>`:""}
+      ${isOwner&&settings?.dg_id?`<button class="btn btn-primary btn-sm" id="dgrefresh">Refresh</button>`:""}
     </div>
     <div id="resbody"></div>`;
 
@@ -1378,7 +1395,7 @@ async function resultsScreen(v){
 
   const body=document.getElementById("resbody");
   if(!results?.length){
-    body.innerHTML=`<div class="empty">${isOwner?"No results yet. Connect Data Golf and hit Refresh to pull your tournament history.":"No results imported yet."}</div>`;
+    body.innerHTML=`<div class="empty">${isOwner?"No results yet. Open Data Golf ⚙, test the connection, then hit Refresh.":"No results imported yet."}</div>`;
     return;
   }
   if(resultsView==="list") renderResultsList(body,results,pid);
@@ -1389,58 +1406,55 @@ async function resultsScreen(v){
 async function dgSetup(settings,v){
   const wrap=document.createElement("div"); wrap.className="cmodal";
   wrap.innerHTML=`<div class="cbox">
-    <div class="chead"><div><b>Data Golf</b><div class="who">Your key is stored privately — the team never sees it</div></div>
+    <div class="chead"><div><b>Data Golf</b><div class="who">Your key is stored on the server, never in the app</div></div>
       <button class="cx" id="dgx">×</button></div>
     <div class="clist" style="padding:14px 16px">
-      <div class="field"><label class="mini">API key</label>
-        <input id="dg-key" value="${esc(settings?.dg_key||"")}" placeholder="paste your key"></div>
       <div class="grid2">
         <div><label class="mini">Data Golf ID</label>
           <input id="dg-id" value="${settings?.dg_id||17646}" placeholder="17646"></div>
         <div><label class="mini">Name (for reference)</label>
-          <input id="dg-name" value="${esc(settings?.dg_name||"Fitzpatrick, Matt")}" placeholder="Fitzpatrick, Matt"></div>
+          <input id="dg-name" value="${esc(settings?.dg_name||"Fitzpatrick, Matt")}"></div>
       </div>
-      <div style="font-size:12px; color:var(--muted); margin-top:6px">
-        Your ID is pre-filled. Leave it as is unless you know it's different.</div>
+      <p style="font-size:12px; color:var(--muted); margin:10px 0 0">
+        The API key is set once in Supabase as a function secret — see the setup notes.
+        Press Test to check the connection.</p>
       <div id="dg-msg" style="margin-top:10px"></div>
     </div>
-    <div class="cfoot"><button class="btn btn-primary btn-sm" id="dg-save" style="width:100%">Save &amp; find my ID</button></div>
+    <div class="cfoot">
+      <button class="btn btn-ghost btn-sm" id="dg-test">Test connection</button>
+      <button class="btn btn-primary btn-sm" id="dg-save" style="margin-left:auto">Save</button></div>
   </div>`;
   document.body.appendChild(wrap);
   const close=()=>wrap.remove();
   wrap.onclick=e=>{ if(e.target===wrap) close(); };
   document.getElementById("dgx").onclick=close;
 
-  document.getElementById("dg-save").onclick=async()=>{
-    const key=val("dg-key").replace(/\s+/g,"");
-    const dgid=parseInt(val("dg-id"),10);
-    const nm=val("dg-name");
+  document.getElementById("dg-test").onclick=async()=>{
     const msg=document.getElementById("dg-msg");
-    if(!key){ msg.innerHTML=`<div class="err">Paste your API key first.</div>`; return; }
-    if(!dgid){ msg.innerHTML=`<div class="err">Enter your Data Golf ID.</div>`; return; }
-    msg.innerHTML=`<div class="who">Checking the key…</div>`;
+    msg.innerHTML=`<div class="who">Testing…</div>`;
     try{
-      const r=await fetch(`${DG_BASE}/get-player-list?file_format=json&key=${encodeURIComponent(key)}`);
-      if(!r.ok) throw new Error("Data Golf rejected the key (status "+r.status+"). Check it's copied in full.");
-      const list=await r.json();
+      const list=await dgCall({action:"player-list"});
       const arr=Array.isArray(list)?list:(list.players||[]);
+      const dgid=parseInt(val("dg-id"),10);
       const hit=arr.find(p=>+p.dg_id===dgid);
-      const {error}=await sb.from("app_settings").upsert({
-        player_id:me.id, dg_key:key, dg_id:dgid,
-        dg_name: hit?hit.player_name:nm, updated_at:new Date().toISOString() });
-      if(error){ msg.innerHTML=`<div class="err">${esc(error.message)}</div>`; return; }
-      msg.innerHTML=`<div style="color:var(--blood-2); font-size:13px">Connected${hit?": "+esc(hit.player_name):""} (ID ${dgid})</div>`;
-      flash("Connected");
-      setTimeout(()=>{ close(); resultsScreen(v); },900);
-    }catch(e){
-      msg.innerHTML=`<div class="err">${esc(e.message)}</div>`;
-    }
+      msg.innerHTML=`<div style="color:var(--blood-2); font-size:13px">Connected · ${arr.length} players${hit?` · found ${esc(hit.player_name)}`:""}</div>`;
+    }catch(e){ msg.innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+  };
+
+  document.getElementById("dg-save").onclick=async()=>{
+    const dgid=parseInt(val("dg-id"),10);
+    const msg=document.getElementById("dg-msg");
+    if(!dgid){ msg.innerHTML=`<div class="err">Enter your Data Golf ID.</div>`; return; }
+    const {error}=await sb.from("app_settings").upsert({
+      player_id:me.id, dg_id:dgid, dg_name:val("dg-name"), updated_at:new Date().toISOString() });
+    if(error){ msg.innerHTML=`<div class="err">${esc(error.message)}</div>`; return; }
+    flash("Saved"); close(); resultsScreen(v);
   };
 }
 
 /* ---- import: pull rounds, aggregate to events ---- */
 async function dgImport(settings,v){
-  if(!settings?.dg_key || !settings?.dg_id){ flash("Connect Data Golf first"); return; }
+  if(!settings?.dg_id){ flash("Set your Data Golf ID first"); return; }
   const body=document.getElementById("resbody");
   const thisYear=new Date().getFullYear();
   const years=[]; for(let y=thisYear; y>=2019; y--) years.push(y);
@@ -1488,10 +1502,7 @@ async function dgImport(settings,v){
     for(const tour of tours){
       prog(`Fetching ${tour.toUpperCase()} ${yr}…  (${imported} imported so far)`);
       try{
-        const url=`${DG_BASE}/historical-raw-data/rounds?tour=${tour}&event_id=all&year=${yr}&file_format=json&key=${encodeURIComponent(settings.dg_key)}`;
-        const r=await fetch(url);
-        if(!r.ok){ problems.push(`${tour} ${yr}: HTTP ${r.status}`); await new Promise(x=>setTimeout(x,1400)); continue; }
-        const json=await r.json();
+        const json=await dgCall({action:"rounds", tour, year:yr});
         const mine=harvest(json);
         checked++;
         for(const ev of mine){

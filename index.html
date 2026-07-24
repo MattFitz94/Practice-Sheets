@@ -162,8 +162,7 @@
   .flash{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--blood-2); color:var(--lime-ink); padding:11px 20px; border-radius:8px; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; opacity:0; transition:opacity .2s; z-index:60}
   .flash.show{opacity:1}
   .load{text-align:center; padding:44px; color:var(--muted); text-transform:uppercase; letter-spacing:.1em; font-size:12px}
-  .seasonmob{display:none}
-  .sfil.on,.cwin.on,.rv.on,.tcat.on{background:var(--blood-2); color:var(--lime-ink); border-color:var(--blood-2)}
+  .sfil.on,.cwin.on,.rv.on,.tcat.on,.lcat.on,.lwk.on,.cmpmode.on{background:var(--blood-2); color:var(--lime-ink); border-color:var(--blood-2)}
   .heatcell{border-radius:4px; padding:7px 4px; text-align:center; color:#0b0b0c; font-weight:800; font-size:11px}
   .rvbar{overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; flex-wrap:nowrap}
   .rvbar .btn{flex:0 0 auto; white-space:nowrap}
@@ -174,9 +173,6 @@
     .authcard h1{font-size:36px}
   }
   @media (max-width:760px){
-    /* season: cards instead of the wide table */
-    .seasondesk{display:none}
-    .seasonmob{display:block}
     /* tabs scroll rather than squash */
     nav.tabs{overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none}
     nav.tabs::-webkit-scrollbar{display:none}
@@ -216,6 +212,16 @@ let activePlayerId = null;  // whose day the grid is showing
 let activeDay = new Date().toISOString().slice(0,10);
 let drillMap = {};          // id -> drill
 let gridRows = [];          // working copy of the day's rows
+
+/* remember where the page was scrolled so re-rendering a view
+   doesn't throw you back to the top */
+function keepScroll(fn){
+  const y = window.scrollY;
+  const r = fn();
+  const restore = ()=>window.scrollTo(0,y);
+  if(r && typeof r.then==="function"){ r.then(restore); } else { restore(); }
+  return r;
+}
 
 function flash(m){ const f=document.getElementById("flash"); f.textContent=m; f.classList.add("show"); setTimeout(()=>f.classList.remove("show"),1700); }
 function val(id){ return document.getElementById(id)?.value?.trim() || ""; }
@@ -1125,16 +1131,7 @@ async function seasonScreen(v){
       <button class="btn btn-ghost btn-sm sfil" data-f="Signature">Big weeks</button>
       <button class="btn btn-ghost btn-sm sfil" data-f="Off">Off</button>
     </div>
-    <div class="gridwrap seasondesk">
-      <table class="grid" style="min-width:900px">
-        <thead><tr>
-          <th>Wk</th><th>Dates</th><th>Country</th><th>City</th>
-          <th class="l">Tournament</th><th class="l">Course</th><th>Status</th>${canEdit?"<th></th>":""}
-        </tr></thead>
-        <tbody id="srows"></tbody>
-      </table>
-    </div>
-    <div class="seasonmob" id="scards"></div>
+    <div id="scards"></div>
     ${canEdit?`<div class="gridtools">
       <button class="btn btn-ghost btn-sm" id="addweek">+ Add week</button>
       <div class="savebar" style="margin-left:auto">
@@ -1163,68 +1160,65 @@ async function seasonScreen(v){
   }
   function drawSeason(){
     drawCards();
-    const tb=document.getElementById("srows"); if(!tb) return; tb.innerHTML="";
-    rows.forEach((w,i)=>{
-      if(!passFilter(w)) return;
-      const tr=document.createElement("tr");
-      const ti=(f,val,w2)=>canEdit
-        ? `<input class="cell-txt" data-i="${i}" data-f="${f}" value="${esc(val||"")}" style="min-width:${w2||110}px">`
-        : `<span class="auto" style="text-align:left;display:block">${val?esc(val):"—"}</span>`;
-      const tier = weekTier(w), ts = TIER_STYLE[tier];
-      tr.style.background=ts.row;
-      tr.style.borderLeft="4px solid "+ts.ac;
-      tr.innerHTML=`
-        <td style="text-align:center; color:${tier==="Off"?"var(--muted)":ts.ac}; font-weight:700">${w.week}${ts.badge?`<div style="font-size:9px; letter-spacing:.06em">${ts.badge}</div>`:''}</td>
-        <td style="text-align:center; font-size:12px; color:var(--muted); white-space:nowrap">${fmt(w.start_date)} – ${fmt(w.end_date)}</td>
-        <td style="text-align:center">${ti("country",w.country,90)}</td>
-        <td>${ti("city",w.city,110)}</td>
-<td style="color:${ts.ac}">${ti("tournament",w.tournament,160)}</td>
-        <td>${ti("course",w.course,140)}</td>
-        <td style="text-align:center">${canEdit
-          ? `<select class="drillsel" data-i="${i}" data-f="status" style="min-width:120px">
-               ${["Tournament","Off","Unknown"].map(o=>`<option ${o===w.status?'selected':''}>${o}</option>`).join("")}
-             </select>`
-          : `<span class="pill ${stPill[w.status]||'p-Technical'}">${esc(w.status)}</span>`}</td>
-        ${canEdit?`<td style="text-align:center"><button class="rowdel" data-i="${i}">×</button></td>`:""}`;
-      tb.appendChild(tr);
-    });
-    if(!canEdit) return;
-    tb.querySelectorAll("input.cell-txt").forEach(inp=>inp.oninput=()=>{
-      rows[+inp.dataset.i][inp.dataset.f]=inp.value; rows[+inp.dataset.i]._dirty=true;
-      document.getElementById("sstate").textContent="Unsaved changes";
-    });
-    tb.querySelectorAll("select[data-f=status]").forEach(sel=>sel.onchange=()=>{
-      rows[+sel.dataset.i].status=sel.value; rows[+sel.dataset.i]._dirty=true;
-      document.getElementById("sstate").textContent="Unsaved changes";
-    });
-    tb.querySelectorAll(".rowdel").forEach(b=>b.onclick=async()=>{
-      const r=rows[+b.dataset.i];
-      if(!confirm("Remove week "+r.week+"?")) return;
-      if(r.id) await sb.from("season_weeks").delete().eq("id",r.id);
-      rows.splice(+b.dataset.i,1); drawSeason();
-    });
   }
 
-  /* ---- mobile: one card per week ---- */
+  /* ---- compact season list, grouped by month ---- */
+
   function drawCards(){
     const box=document.getElementById("scards"); if(!box) return;
     const list=rows.map((w,i)=>({w,i})).filter(({w})=>passFilter(w));
     if(!list.length){ box.innerHTML=`<div class="empty">Nothing to show.</div>`; return; }
-    box.innerHTML=list.map(({w,i})=>{
-      const tier=weekTier(w), ts=TIER_STYLE[tier];
-      const place=[w.city,w.country].filter(Boolean).join(", ");
-      return `<div style="background:${ts.bg==="transparent"?"var(--panel)":ts.bg}; border:1px solid ${tier==="Off"?"var(--line)":ts.ac+"55"}; border-left:5px solid ${ts.ac}; border-radius:10px; padding:11px 13px; margin-bottom:8px">
-        <div style="display:flex; justify-content:space-between; gap:10px; align-items:baseline">
-          <span style="font-size:11px; color:${tier==="Off"?"var(--muted)":ts.ac}; font-weight:700">WK ${w.week}${ts.badge?' · '+ts.badge:''}</span>
-          <span style="font-size:11px; color:var(--muted); white-space:nowrap">${fmt(w.start_date)} – ${fmt(w.end_date)}</span>
+
+    const MONTHS=["January","February","March","April","May","June",
+                  "July","August","September","October","November","December"];
+    // group by the month the week starts in
+    const groups={};
+    list.forEach(({w,i})=>{
+      const key = w.start_date ? w.start_date.slice(0,7) : "unknown";
+      (groups[key]=groups[key]||[]).push({w,i});
+    });
+    const keys=Object.keys(groups).sort();
+
+    box.innerHTML=keys.map(key=>{
+      const items=groups[key];
+      const label = key==="unknown" ? "Undated"
+        : MONTHS[+key.slice(5,7)-1] + " " + key.slice(0,4);
+      const evCount=items.filter(({w})=>w.status==="Tournament").length;
+
+      return `<div style="margin-bottom:16px">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+                    padding:6px 2px; border-bottom:1px solid var(--line); margin-bottom:6px">
+          <span style="font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.06em">${label}</span>
+          <span style="font-size:11px; color:var(--muted)">${evCount} event${evCount===1?"":"s"}</span>
         </div>
-        <div style="font-size:15px; font-weight:700; margin-top:3px; color:${tier==="Off"||tier==="Unknown"?"var(--ink)":ts.ac}">${w.tournament?esc(w.tournament):'<span style="color:var(--faint); font-weight:400">'+esc(w.status)+'</span>'}</div>
-        ${w.course?`<div style="font-size:12px; color:var(--muted)">${esc(w.course)}</div>`:""}
-        ${place?`<div style="font-size:12px; color:var(--faint); margin-top:2px">${esc(place)}</div>`:""}
-        ${canEdit?`<button class="btn btn-ghost btn-sm cedit" data-i="${i}" style="margin-top:9px; width:100%">Edit week</button>`:""}
+        ${items.map(({w,i})=>{
+          const tier=weekTier(w), ts=TIER_STYLE[tier];
+          const place=[w.city,w.country].filter(Boolean).join(", ");
+          const isOff = tier==="Off" || tier==="Unknown";
+          return `<div class="seasonrow" data-i="${i}" style="
+              display:flex; align-items:center; gap:10px;
+              padding:8px 10px; margin-bottom:4px;
+              background:${isOff?"transparent":ts.row};
+              border-left:3px solid ${ts.ac}; border-radius:0 7px 7px 0;
+              ${canEdit?"cursor:pointer":""}">
+            <span style="font-size:10px; color:var(--faint); min-width:26px; font-weight:700">W${w.week}</span>
+            <span style="font-size:10px; color:var(--muted); min-width:60px; white-space:nowrap">${fmt(w.start_date)}</span>
+            <div style="flex:1; min-width:0">
+              <div style="font-size:13px; font-weight:${isOff?"400":"700"};
+                          color:${isOff?"var(--faint)":ts.ac};
+                          overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+                ${w.tournament?esc(w.tournament):esc(w.status)}${ts.badge?` <span style="font-size:9px">· ${ts.badge}</span>`:""}
+              </div>
+              ${(w.course||place)?`<div style="font-size:10px; color:var(--faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc([w.course,place].filter(Boolean).join(" · "))}</div>`:""}
+            </div>
+          </div>`;
+        }).join("")}
       </div>`;
     }).join("");
-    box.querySelectorAll(".cedit").forEach(b=>b.onclick=()=>editWeek(+b.dataset.i));
+
+    if(canEdit){
+      box.querySelectorAll(".seasonrow").forEach(el=>el.onclick=()=>editWeek(+el.dataset.i));
+    }
   }
 
   /* ---- mobile: edit one week in a sheet ---- */
@@ -1269,7 +1263,7 @@ async function seasonScreen(v){
   document.querySelectorAll(".sfil").forEach(b=>b.onclick=()=>{
     seasonFilter=b.dataset.f;
     document.querySelectorAll(".sfil").forEach(x=>x.classList.toggle("on",x===b));
-    drawSeason();
+    keepScroll(()=>drawSeason());
   });
 
   drawSeason();
@@ -1392,7 +1386,7 @@ async function resultsScreen(v){
     </div>
     <div id="resbody"></div>`;
 
-  v.querySelectorAll(".rv").forEach(b=>b.onclick=()=>{ resultsView=b.dataset.v; resultsScreen(v); });
+  v.querySelectorAll(".rv").forEach(b=>b.onclick=()=>{ resultsView=b.dataset.v; keepScroll(()=>resultsScreen(v)); });
   if(isOwner){
     document.getElementById("dgsetup").onclick=()=>dgSetup(settings,v);
     const rf=document.getElementById("dgrefresh");
@@ -1723,7 +1717,7 @@ function renderTrend(box,results){
         ${rows.map(r=>`<div style="flex:1; font-size:8px; color:var(--faint); text-align:center; overflow:hidden; white-space:nowrap">${esc(evLabel(r).slice(0,7))}</div>`).join("")}
       </div>
     </div>`;
-  box.querySelectorAll(".tcat").forEach(b=>b.onclick=()=>{ trendCat=b.dataset.c; renderTrend(box,results); });
+  box.querySelectorAll(".tcat").forEach(b=>b.onclick=()=>{ trendCat=b.dataset.c; keepScroll(()=>renderTrend(box,results)); });
 }
 
 /* ---- 3. FORM GUIDE ---- */
@@ -1865,45 +1859,34 @@ async function renderLag(box,results,pid){
         <br><span style="color:var(--faint); font-size:12px">With this few events, treat it as a talking point rather than proof — golf is noisy, and one bad week moves this a long way.</span>
       </div>
     </div>`;
-  box.querySelectorAll(".lcat").forEach(b2=>b2.onclick=()=>{ lagCat=b2.dataset.c; renderLag(box,results,pid); });
-  box.querySelectorAll(".lwk").forEach(b2=>b2.onclick=()=>{ lagWeeks=+b2.dataset.w; renderLag(box,results,pid); });
+  box.querySelectorAll(".lcat").forEach(b2=>b2.onclick=()=>{ lagCat=b2.dataset.c; keepScroll(()=>renderLag(box,results,pid)); });
+  box.querySelectorAll(".lwk").forEach(b2=>b2.onclick=()=>{ lagWeeks=+b2.dataset.w; keepScroll(()=>renderLag(box,results,pid)); });
 }
 
-/* ---- 5. COMPARE EVENTS (pick two groups) ---- */
-let cmpA=new Set(), cmpB=new Set(), cmpInit=false;
+/* ---- 5. COMPARE EVENTS — checklist with search ---- */
+let cmpA=new Set(), cmpB=new Set(), cmpInit=false, cmpTarget="A", cmpSearch="";
 
 function renderTier(box,results){
   if(!results.length){ box.innerHTML=`<div class="empty">No results yet.</div>`; return; }
 
-  // first time in: default to majors vs everything else
   if(!cmpInit){
-    results.forEach(r=>{
-      const k=r.id;
-      if(MAJOR_RE.test((r.event_name||"").trim())) cmpA.add(k); else cmpB.add(k);
-    });
+    results.forEach(r=>{ if(MAJOR_RE.test((r.event_name||"").trim())) cmpA.add(r.id); else cmpB.add(r.id); });
     cmpInit=true;
   }
 
   const inA=results.filter(r=>cmpA.has(r.id));
   const inB=results.filter(r=>cmpB.has(r.id));
   const avg=(arr,f)=>{ const xs=arr.map(r=>r[f]).filter(x=>x!=null).map(Number); return xs.length? xs.reduce((x,y)=>x+y,0)/xs.length : null; };
+  const q=cmpSearch.trim().toLowerCase();
+  const shown=results.filter(r=>!q || (r.event_name||"").toLowerCase().includes(q) || String(r.year||"").includes(q));
 
   box.innerHTML=`
-    <p style="font-size:12px; color:var(--muted); margin:0 0 10px">
-      Put any events into Group A or Group B and compare. Defaults to majors vs the rest.</p>
-
-    <div class="daybar" style="margin-bottom:10px">
-      <button class="btn btn-ghost btn-sm" id="cmp-majors">Majors vs rest</button>
-      <button class="btn btn-ghost btn-sm" id="cmp-clear">Clear</button>
-      <span class="who" style="margin-left:auto">A: ${inA.length} · B: ${inB.length}</span>
-    </div>
-
     ${(inA.length&&inB.length)?`
-    <div class="gridwrap" style="padding:2px; margin-bottom:14px">
+    <div class="gridwrap" style="padding:2px; margin-bottom:8px">
       <table class="grid" style="min-width:420px">
         <thead><tr><th class="l">Category</th>
-          <th style="color:var(--blood-2)">Group A (${inA.length})</th>
-          <th style="color:#7fc4dd">Group B (${inB.length})</th><th>Gap</th></tr></thead>
+          <th style="color:var(--blood-2)">A (${inA.length})</th>
+          <th style="color:#7fc4dd">B (${inB.length})</th><th>Gap</th></tr></thead>
         <tbody>
         ${[...SGCATS,["sg_total","Total"]].map(c=>{
           const m=avg(inA,c[0]), o=avg(inB,c[0]);
@@ -1919,37 +1902,63 @@ function renderTier(box,results){
       </table>
     </div>
     ${(inA.length<4||inB.length<4)?`<p style="font-size:12px; color:var(--faint); margin:0 0 12px">
-      Small groups swing heavily on one week — read this loosely.</p>`:""}
-    `:`<div class="empty" style="margin-bottom:14px">Put at least one event in each group to compare.</div>`}
+      Small groups swing heavily on one week — read this loosely.</p>`:`<div style="height:8px"></div>`}
+    `:`<div class="empty" style="margin-bottom:12px">Tick events into A and B below to compare.</div>`}
 
-    <div class="sec-h"><h2 style="font-size:16px">Assign events</h2></div>
-    <div class="card" style="max-height:400px; overflow-y:auto">
-      ${results.map(r=>{
-        const a=cmpA.has(r.id), b2=cmpB.has(r.id);
-        return `<div class="row-item">
-          <div class="name">${esc(r.event_name||"")}
-            <small>${r.year||""} · ${esc(r.finish||"—")} · ${sgFmt(r.sg_total)}</small></div>
-          <button class="btn btn-ghost btn-sm cmpbtn" data-id="${r.id}" data-g="A"
-            style="${a?"background:var(--blood-2); color:var(--lime-ink); border-color:var(--blood-2)":""}">A</button>
-          <button class="btn btn-ghost btn-sm cmpbtn" data-id="${r.id}" data-g="B"
-            style="${b2?"background:#7fc4dd; color:var(--lime-ink); border-color:#7fc4dd":""}">B</button>
-        </div>`;
-      }).join("")}
+    <div class="card">
+      <div class="inline" style="margin-bottom:10px; flex-wrap:wrap; gap:7px">
+        <input id="cmp-q" value="${esc(cmpSearch)}" placeholder="Search events…" style="flex:1; min-width:140px">
+        <button class="btn btn-ghost btn-sm cmpmode ${cmpTarget==="A"?"on":""}" data-t="A">Tick into A</button>
+        <button class="btn btn-ghost btn-sm cmpmode ${cmpTarget==="B"?"on":""}" data-t="B">Tick into B</button>
+      </div>
+      <div class="inline" style="margin-bottom:8px; flex-wrap:wrap; gap:7px">
+        <button class="btn btn-ghost btn-sm" id="cmp-majors">Majors vs rest</button>
+        <button class="btn btn-ghost btn-sm" id="cmp-all">${q?"All shown":"Select all"} → ${cmpTarget}</button>
+        <button class="btn btn-ghost btn-sm" id="cmp-clear">Clear</button>
+      </div>
+      <div style="max-height:360px; overflow-y:auto; border-top:1px solid var(--line)">
+        ${shown.length? shown.map(r=>{
+          const isA=cmpA.has(r.id), isB=cmpB.has(r.id);
+          const tag = isA?`<span class="pill" style="background:var(--blood-2); color:var(--lime-ink)">A</span>`
+                   : isB?`<span class="pill" style="background:#7fc4dd; color:var(--lime-ink)">B</span>`
+                   : `<span class="pill p-Technical">—</span>`;
+          return `<label class="row-item cmprow" data-id="${r.id}" style="cursor:pointer">
+            <input type="checkbox" class="cmpchk" data-id="${r.id}" ${(isA||isB)?"checked":""} style="width:18px; height:18px; accent-color:var(--blood-2)">
+            <div class="name">${esc(r.event_name||"")}
+              <small>${r.year||""} · ${esc(r.finish||"—")} · ${sgFmt(r.sg_total)}</small></div>
+            ${tag}
+          </label>`;
+        }).join("") : `<div class="empty" style="border:0">No events match "${esc(cmpSearch)}".</div>`}
+      </div>
     </div>`;
 
-  box.querySelectorAll(".cmpbtn").forEach(btn=>btn.onclick=()=>{
-    const id=btn.dataset.id, g=btn.dataset.g;
-    if(g==="A"){ if(cmpA.has(id)){cmpA.delete(id);} else {cmpA.add(id); cmpB.delete(id);} }
-    else { if(cmpB.has(id)){cmpB.delete(id);} else {cmpB.add(id); cmpA.delete(id);} }
-    renderTier(box,results);
+  const qbox=document.getElementById("cmp-q");
+  qbox.oninput=()=>{ cmpSearch=qbox.value; keepScroll(()=>{ renderTier(box,results);
+    const nb=document.getElementById("cmp-q"); if(nb){ nb.focus(); nb.setSelectionRange(nb.value.length,nb.value.length); } }); };
+
+  box.querySelectorAll(".cmpmode").forEach(b2=>b2.onclick=()=>{
+    cmpTarget=b2.dataset.t; keepScroll(()=>renderTier(box,results)); });
+
+  box.querySelectorAll(".cmpchk").forEach(chk=>chk.onchange=(e)=>{
+    e.stopPropagation();
+    const id=chk.dataset.id;
+    if(chk.checked){
+      if(cmpTarget==="A"){ cmpA.add(id); cmpB.delete(id); } else { cmpB.add(id); cmpA.delete(id); }
+    } else { cmpA.delete(id); cmpB.delete(id); }
+    keepScroll(()=>renderTier(box,results));
   });
+
   document.getElementById("cmp-majors").onclick=()=>{
     cmpA=new Set(); cmpB=new Set();
     results.forEach(r=>{ if(MAJOR_RE.test((r.event_name||"").trim())) cmpA.add(r.id); else cmpB.add(r.id); });
-    renderTier(box,results);
+    keepScroll(()=>renderTier(box,results));
+  };
+  document.getElementById("cmp-all").onclick=()=>{
+    shown.forEach(r=>{ if(cmpTarget==="A"){ cmpA.add(r.id); cmpB.delete(r.id); } else { cmpB.add(r.id); cmpA.delete(r.id); } });
+    keepScroll(()=>renderTier(box,results));
   };
   document.getElementById("cmp-clear").onclick=()=>{
-    cmpA=new Set(); cmpB=new Set(); renderTier(box,results);
+    cmpA=new Set(); cmpB=new Set(); keepScroll(()=>renderTier(box,results));
   };
 }
 
@@ -2012,7 +2021,7 @@ async function renderCorrelation(box,results,pid){
       </div></div>`:""}`;
 
   box.querySelectorAll(".cwin").forEach(b=>b.onclick=()=>{
-    corrWindow=+b.dataset.w; renderCorrelation(box,results,pid);
+    corrWindow=+b.dataset.w; keepScroll(()=>renderCorrelation(box,results,pid));
   });
 }
 

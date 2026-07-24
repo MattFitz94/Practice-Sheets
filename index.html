@@ -126,6 +126,19 @@
   .doneflag.on{color:var(--fair)}
   .rowdel{background:none; border:0; color:var(--faint); font-size:16px; cursor:pointer; padding:2px 6px}
   .rowdel:hover{color:var(--blood-2)}
+  .cbtn{background:none; border:0; color:var(--faint); font-size:13px; cursor:pointer; padding:2px 4px}
+  .cbtn:hover{color:var(--blood-2)}
+  .cbtn b{color:var(--blood-2); font-size:11px; margin-left:1px}
+  .cmodal{position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:80; padding:16px}
+  .cbox{background:var(--panel); border:1px solid var(--line); border-radius:12px; width:100%; max-width:440px; max-height:80vh; display:flex; flex-direction:column}
+  .chead{display:flex; align-items:flex-start; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--line)}
+  .cx{background:none; border:0; color:var(--muted); font-size:22px; cursor:pointer; line-height:1}
+  .clist{overflow-y:auto; padding:8px 16px; flex:1}
+  .citem{padding:10px 0; border-bottom:1px solid var(--line); font-size:14px}
+  .citem:last-child{border-bottom:0}
+  .cmeta{font-size:12px; color:var(--muted); margin-bottom:3px}
+  .cfoot{display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--line)}
+  .cfoot input{flex:1; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:var(--panel-2); color:var(--ink)}
   tfoot td{background:var(--panel-2); font-weight:800; padding:10px 8px; border-top:2px solid var(--line); text-align:center}
   tfoot td.l{text-align:left; text-transform:uppercase; letter-spacing:.06em; font-size:12px; color:var(--gold)}
 
@@ -196,7 +209,7 @@ function authScreen(mode){
      <p class="sub">${signup?"Set up your account. Coaches build the plan, players put in the work — same sheet, one source of truth.":"Sign in and get after it."}</p>
      <div id="autherr"></div>
      ${signup?`<div class="field"><label>Your name</label><input id="a-name" placeholder="Matt Fitzpatrick"></div>`:""}
-     ${signup?`<div class="field"><label>I am a…</label><select id="a-role"><option value="player">Player</option><option value="coach">Coach</option></select></div>`:""}
+     ${signup?`<div class="field"><label>I am a…</label><select id="a-role"><option value="player">Player</option><option value="coach">Coach</option><option value="viewer">Viewer (view only)</option></select></div>`:""}
      <div class="field"><label>Email</label><input id="a-email" type="email" placeholder="you@email.com"></div>
      <div class="field"><label>Password</label><input id="a-pass" type="password" placeholder="••••••••"></div>
      <button class="btn btn-primary" id="a-go">${signup?"Create account":"Sign in"}</button>
@@ -238,6 +251,9 @@ async function boot(){
       .select("player_id, profiles!coach_players_player_id_fkey(full_name)").eq("coach_id",me.id);
     players=(links||[]).map(l=>({id:l.player_id,name:l.profiles?.full_name||"Player"}));
     activePlayerId=players[0]?.id||null;
+  }else if(me.role==="viewer"){
+    const {data:pv}=await sb.from("player_viewers").select("player_id").eq("viewer_id",me.id).limit(1).maybeSingle();
+    activePlayerId=pv?.player_id||null;
   }else{
     activePlayerId=me.id;
   }
@@ -251,8 +267,10 @@ sb.auth.onAuthStateChange(()=>boot());
 let currentTab=null;
 function shell(){
   const tabs = me.role==="coach"
-    ? [["day","The Sheet"],["week","Week"],["players","Players"],["library","Drills"],["progress","Progress"]]
-    : [["day","The Sheet"],["week","Week"],["progress","Progress"]];
+    ? [["day","The Sheet"],["week","Week"],["sched","Schedule"],["season","Season"],["players","Players"],["library","Drills"],["progress","Progress"]]
+    : me.role==="viewer"
+    ? [["day","The Sheet"],["week","Week"],["sched","Schedule"],["season","Season"],["progress","Progress"]]
+    : [["day","The Sheet"],["week","Week"],["sched","Schedule"],["season","Season"],["team","Team"],["progress","Progress"]];
   if(!currentTab) currentTab=tabs[0][0];
   app.innerHTML=`
     <header><div class="wrap">
@@ -276,6 +294,9 @@ function renderTab(){
   v.innerHTML=`<div class="load">Loading</div>`;
   if(currentTab==="day") dayScreen(v);
   else if(currentTab==="week") weekScreen(v);
+  else if(currentTab==="sched") scheduleScreen(v);
+  else if(currentTab==="season") seasonScreen(v);
+  else if(currentTab==="team") teamScreen(v);
   else if(currentTab==="players") coachPlayers(v);
   else if(currentTab==="library") library(v);
   else if(currentTab==="progress") progress(v);
@@ -323,10 +344,10 @@ async function dayScreen(v){
       </table>
     </div>
     <div class="gridtools">
-      <button class="btn btn-ghost btn-sm" id="addrow">+ Add row</button>
+      ${me.role==="viewer"?"":`<button class="btn btn-ghost btn-sm" id="addrow">+ Add row</button>`}
       <div class="savebar" style="margin-left:auto">
         <span class="savestate" id="savestate"></span>
-        <button class="btn btn-primary btn-sm" id="savegrid">Save the day</button>
+        ${me.role==="viewer"?`<span class="who">Read only</span>`:`<button class="btn btn-primary btn-sm" id="savegrid">Save the day</button>`}
       </div>
     </div>`;
 
@@ -338,8 +359,8 @@ async function dayScreen(v){
   document.getElementById("dprev").onclick=()=>shiftDay(-1);
   document.getElementById("dnext").onclick=()=>shiftDay(1);
   document.getElementById("dtoday").onclick=()=>{ activeDay=new Date().toISOString().slice(0,10); dayScreen(v); };
-  document.getElementById("addrow").onclick=()=>{ gridRows.push(blankRow()); drawRows(drills); };
-  document.getElementById("savegrid").onclick=saveDay;
+  const arow=document.getElementById("addrow"); if(arow) arow.onclick=()=>{ gridRows.push(blankRow()); drawRows(drills); };
+  const sgrid=document.getElementById("savegrid"); if(sgrid) sgrid.onclick=saveDay;
 
   await loadDay();
   drawRows(drills);
@@ -356,6 +377,14 @@ async function loadDay(){
     distance:r.distance??"", mental:r.mental??"", physical:r.physical??"",
     status:r.status||(r.completed?"done":"pending"), completed_notes:r.completed_notes||"", notes:r.notes||"", _dirty:false
   }));
+  // comment counts per row
+  const ids=gridRows.map(r=>r.id).filter(Boolean);
+  if(ids.length){
+    const {data:cs}=await sb.from("comments").select("session_id").in("session_id",ids);
+    const tally={}; (cs||[]).forEach(c=>tally[c.session_id]=(tally[c.session_id]||0)+1);
+    gridRows.forEach(r=>{ r._ccount = r.id?(tally[r.id]||0):0; });
+  }
+
   if(!gridRows.length) gridRows=[blankRow(),blankRow(),blankRow()];
 
   // If this day is in the past, anything never ticked counts as NOT completed.
@@ -370,6 +399,7 @@ async function loadDay(){
 function drawRows(drills){
   const tb=document.getElementById("rows"); if(!tb) return;
   const isPlayer = me.role==="player";
+  const isViewer = me.role==="viewer";
   tb.innerHTML="";
   gridRows.forEach((r,i)=>{
     const d = r.drill_id ? drillMap[r.drill_id] : null;
@@ -385,20 +415,20 @@ function drawRows(drills){
       : `<span class="auto" style="text-align:left; min-width:120px; display:block">${r.completed_notes?esc(r.completed_notes):'—'}</span>`;
     const tr=document.createElement("tr");
     tr.innerHTML=`
-      <td><select class="drillsel" data-i="${i}">${opts}</select></td>
+      <td>${isViewer?`<span style="font-size:14px">${d?esc(d.name):"—"}</span>`:`<select class="drillsel" data-i="${i}">${opts}</select>`}</td>
       <td><span class="auto">${d&&d.default_club?esc(d.default_club):'—'}</span></td>
       <td style="text-align:center">${catCell}</td>
-      <td style="text-align:center"><input class="cell-in" data-i="${i}" data-f="minutes" value="${esc(r.minutes)}"></td>
-      <td style="text-align:center"><input class="cell-in" data-i="${i}" data-f="balls" value="${esc(r.balls)}"></td>
+      <td style="text-align:center">${isViewer?`<span class="auto">${r.minutes===""?"—":esc(r.minutes)}</span>`:`<input class="cell-in" data-i="${i}" data-f="minutes" value="${esc(r.minutes)}">`}</td>
+      <td style="text-align:center">${isViewer?`<span class="auto">${r.balls===""?"—":esc(r.balls)}</span>`:`<input class="cell-in" data-i="${i}" data-f="balls" value="${esc(r.balls)}">`}</td>
       <td><span class="auto">${d&&d.distance?esc(d.distance):(r.distance?esc(r.distance):'—')}</span></td>
-      <td style="text-align:center"><input class="cell-in" data-i="${i}" data-f="mental" value="${esc(r.mental)}"></td>
-      <td style="text-align:center"><input class="cell-in" data-i="${i}" data-f="physical" value="${esc(r.physical)}"></td>
+      <td style="text-align:center">${isViewer?`<span class="auto">${r.mental===""?"—":esc(r.mental)}</span>`:`<input class="cell-in" data-i="${i}" data-f="mental" value="${esc(r.mental)}">`}</td>
+      <td style="text-align:center">${isViewer?`<span class="auto">${r.physical===""?"—":esc(r.physical)}</span>`:`<input class="cell-in" data-i="${i}" data-f="physical" value="${esc(r.physical)}">`}</td>
       <td><span class="auto">${d&&d.why?esc(d.why):'—'}</span></td>
       <td><span class="auto" style="text-align:left; display:block; min-width:110px">${d&&d.goal?esc(d.goal):'—'}</span></td>
       <td style="text-align:center">${doneCell}</td>
       <td>${cnoteCell}</td>
-      <td><input class="cell-txt" data-i="${i}" data-f="notes" value="${esc(r.notes)}" placeholder="notes"></td>
-      <td style="text-align:center"><button class="rowdel" data-i="${i}" title="Remove">×</button></td>`;
+      <td>${isViewer?`<span class="auto" style="text-align:left;display:block">${r.notes?esc(r.notes):"—"}</span>`:`<input class="cell-txt" data-i="${i}" data-f="notes" value="${esc(r.notes)}" placeholder="notes">`}</td>
+      <td style="text-align:center">${isViewer?"":`<button class="rowdel" data-i="${i}" title="Remove">×</button>`}<button class="cbtn" data-i="${i}" title="Comments">💬${r._ccount?`<b>${r._ccount}</b>`:""}</button></td>`;
     tb.appendChild(tr);
   });
 
@@ -430,7 +460,48 @@ function drawRows(drills){
     if(row.id){ await sb.from("sessions").delete().eq("id",row.id); }
     gridRows.splice(i,1); if(!gridRows.length)gridRows=[blankRow()]; drawRows(drills); totals();
   });
+  tb.querySelectorAll(".cbtn").forEach(b=>b.onclick=()=>openComments(+b.dataset.i));
   totals();
+}
+
+/* ---------- per-drill comments ---------- */
+async function openComments(i){
+  const row=gridRows[i];
+  if(!row.id){ flash("Save the day first, then comment"); return; }
+  const d=row.drill_id?drillMap[row.drill_id]:null;
+  const {data:cs}=await sb.from("comments")
+    .select("*, profiles(full_name, role)").eq("session_id",row.id).order("created_at");
+  const wrap=document.createElement("div");
+  wrap.className="cmodal";
+  wrap.innerHTML=`
+    <div class="cbox">
+      <div class="chead">
+        <div><b>${esc(d?d.name:"Drill")}</b><div class="who">${activeDay}</div></div>
+        <button class="cx" id="cclose">×</button>
+      </div>
+      <div class="clist" id="clist">
+        ${(cs||[]).length? cs.map(c=>`
+          <div class="citem">
+            <div class="cmeta">${esc(c.profiles?.full_name||"—")} <span class="who">${c.profiles?.role||""}</span></div>
+            <div>${esc(c.body)}</div>
+          </div>`).join("") : `<div class="empty" style="padding:18px">No comments yet.</div>`}
+      </div>
+      <div class="cfoot">
+        <input id="cinput" placeholder="Add a comment…">
+        <button class="btn btn-primary btn-sm" id="cpost">Post</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  document.getElementById("cclose").onclick=close;
+  document.getElementById("cpost").onclick=async()=>{
+    const body=document.getElementById("cinput").value.trim();
+    if(!body) return;
+    const {error}=await sb.from("comments").insert({session_id:row.id, author_id:me.id, body});
+    if(error){ flash(error.message); return; }
+    close(); row._ccount=(row._ccount||0)+1; flash("Comment posted"); renderTab();
+  };
 }
 
 function totals(){
@@ -576,6 +647,267 @@ async function weekScreen(v){
       <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:14px">Category summary · this week</h3>
       ${summaryRows}
     </div>`;
+}
+
+
+/* ============================================================
+   9. DAY SCHEDULE — yours to edit, team can view (bar private)
+   ============================================================ */
+let schedDay = new Date().toISOString().slice(0,10);
+
+function addMins(hhmm, mins){
+  if(!hhmm) return "";
+  const p=hhmm.split(":"); if(p.length<2) return "";
+  const d=new Date(2000,0,1,+p[0]||0,+p[1]||0);
+  d.setMinutes(d.getMinutes()+(mins||0));
+  return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+}
+
+async function scheduleScreen(v){
+  const pid = me.role==="player" ? me.id : activePlayerId;
+  if(!pid){ v.innerHTML=`<div class="empty">No player linked.</div>`; return; }
+  const canEdit = me.role==="player";
+
+  const {data:items}=await sb.from("schedule_items").select("*")
+    .eq("player_id",pid).eq("day",schedDay).order("start_time");
+  // practice length comes from that day's drills
+  const {data:sess}=await sb.from("sessions").select("minutes, drills(name)")
+    .eq("player_id",pid).eq("logged_on",schedDay);
+  const practiceMins=(sess||[]).reduce((a,s)=>a+(+s.minutes||0),0);
+  const practiceList=(sess||[]).filter(s=>s.drills).map(s=>`${esc(s.drills.name)} · ${s.minutes||0}m`);
+
+  v.innerHTML=`
+    <div class="daybar">
+      <button class="btn btn-ghost btn-sm" id="sprev">‹</button>
+      <div class="dsel"><span class="who">Day</span><input type="date" id="sday" value="${schedDay}"></div>
+      <button class="btn btn-ghost btn-sm" id="snext">›</button>
+      <button class="btn btn-ghost btn-sm" id="stoday">Today</button>
+      <span class="who" style="margin-left:auto">${canEdit?"Your schedule — only you can edit":"Read only"}</span>
+    </div>
+    <div class="gridwrap" style="min-width:0"><div id="slist"></div></div>
+    ${canEdit?`
+    <div class="card" style="margin-top:14px">
+      <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:12px">Add to the day</h3>
+      <div class="grid3">
+        <div><label class="mini">Start</label><input id="itime" type="time" value="09:00"></div>
+        <div><label class="mini">Type</label><select id="ikind"><option value="practice">Practice</option><option value="media">Media</option><option value="other">Other</option></select></div>
+        <div><label class="mini">Minutes</label><input id="imins" type="number" placeholder="45"></div>
+      </div>
+      <div class="field" style="margin-top:8px"><label class="mini">Label</label><input id="ilabel" placeholder="e.g. Sky Sports interview / Lunch"></div>
+      <div class="inline" style="margin-top:10px">
+        <label class="inline" style="font-size:13px; color:var(--muted)"><input type="checkbox" id="ipriv" style="width:auto"> Private (hidden from your team)</label>
+        <button class="btn btn-primary btn-sm" id="iadd" style="margin-left:auto">Add</button>
+      </div>
+      <p style="margin:10px 0 0; font-size:12px; color:var(--muted)">For Practice, leave Minutes blank — the end time is worked out from that day's drills.</p>
+    </div>`:""}`;
+
+  const shift=n=>{ const d=new Date(schedDay+"T00:00:00"); d.setDate(d.getDate()+n); schedDay=d.toISOString().slice(0,10); scheduleScreen(v); };
+  document.getElementById("sprev").onclick=()=>shift(-1);
+  document.getElementById("snext").onclick=()=>shift(1);
+  document.getElementById("stoday").onclick=()=>{ schedDay=new Date().toISOString().slice(0,10); scheduleScreen(v); };
+  document.getElementById("sday").onchange=e=>{ schedDay=e.target.value; scheduleScreen(v); };
+
+  const kindPill={media:"p-Performance",practice:"p-Putting",other:"p-Technical"};
+  const list=document.getElementById("slist");
+  if(!items?.length){
+    list.innerHTML=`<div class="empty" style="border:0">Nothing scheduled for this day.</div>`;
+  } else {
+    list.innerHTML=items.map((it,i)=>{
+      const isPractice=it.kind==="practice";
+      const mins=isPractice?practiceMins:(it.duration_mins||0);
+      const endT=addMins(it.start_time,mins);
+      return `<div style="display:flex; gap:12px; padding:12px 14px; ${i<items.length-1?'border-bottom:1px solid var(--line);':''}">
+        <div style="min-width:92px">
+          <div style="font-size:14px; font-weight:800">${esc(it.start_time||"")}${endT?` – ${endT}`:""}</div>
+          <div style="font-size:11px; color:var(--muted)">${mins?mins+"m":""}</div>
+        </div>
+        <div style="flex:1">
+          <div class="inline" style="flex-wrap:wrap; gap:8px">
+            <span class="pill ${kindPill[it.kind]||'p-Technical'}">${esc(it.kind)}</span>
+            <span style="font-size:14px">${esc(it.label||"")}</span>
+            ${it.is_private?`<span class="pill p-Technical">private</span>`:""}
+          </div>
+          ${isPractice&&practiceList.length?`<div style="font-size:12px; color:var(--muted); margin-top:5px; line-height:1.5">${practiceList.join("<br>")}</div>`:""}
+          ${isPractice&&!practiceList.length?`<div style="font-size:12px; color:var(--faint); margin-top:4px">No drills on the sheet for this day yet</div>`:""}
+        </div>
+        ${canEdit?`<button class="rowdel" data-id="${it.id}" title="Remove">×</button>`:""}
+      </div>`;
+    }).join("");
+    list.querySelectorAll(".rowdel").forEach(b=>b.onclick=async()=>{
+      await sb.from("schedule_items").delete().eq("id",b.dataset.id); scheduleScreen(v);
+    });
+  }
+
+  if(canEdit){
+    document.getElementById("iadd").onclick=async()=>{
+      const kind=val("ikind");
+      const {error}=await sb.from("schedule_items").insert({
+        player_id:me.id, day:schedDay, start_time:val("itime"),
+        duration_mins: kind==="practice"?null:(+val("imins")||null),
+        kind, label:val("ilabel"), is_private:document.getElementById("ipriv").checked });
+      if(error){ flash(error.message); return; }
+      flash("Added"); scheduleScreen(v);
+    };
+  }
+}
+
+/* ============================================================
+   10. SEASON — tournament schedule, mirrors the spreadsheet
+   ============================================================ */
+let seasonYear = new Date().getFullYear();
+
+async function seasonScreen(v){
+  const pid = me.role==="player" ? me.id : activePlayerId;
+  if(!pid){ v.innerHTML=`<div class="empty">No player linked.</div>`; return; }
+  const canEdit = me.role==="player";
+
+  const {data:years}=await sb.from("season_weeks").select("year").eq("player_id",pid);
+  const yrList=[...new Set((years||[]).map(y=>y.year))].sort();
+  if(yrList.length && !yrList.includes(seasonYear)) seasonYear=yrList[yrList.length-1];
+
+  const {data:weeks}=await sb.from("season_weeks").select("*")
+    .eq("player_id",pid).eq("year",seasonYear).order("week");
+
+  const ev=(weeks||[]).filter(w=>w.status==="Tournament").length;
+  const off=(weeks||[]).filter(w=>w.status==="Off").length;
+  const unk=(weeks||[]).filter(w=>w.status==="Unknown").length;
+  const stPill={Tournament:"p-Performance",Off:"p-Technical",Unknown:"p-Driving"};
+  const fmt=d=>{ if(!d)return "—"; const x=new Date(d+"T00:00:00"); return x.toLocaleDateString(undefined,{day:'numeric',month:'short'}); };
+
+  v.innerHTML=`
+    <div class="daybar">
+      <div class="dsel"><span class="who">Year</span>
+        <select id="yrsel" style="background:transparent;border:0;color:var(--ink);font-weight:700">
+          ${yrList.map(y=>`<option ${y===seasonYear?'selected':''}>${y}</option>`).join("")}
+        </select></div>
+      ${canEdit?`<button class="btn btn-ghost btn-sm" id="addyear">+ Add year</button>`:""}
+      <span class="who" style="margin-left:auto">
+        <b>${ev}</b> events · ${off} off · ${unk} unknown
+      </span>
+    </div>
+    <div class="gridwrap">
+      <table class="grid" style="min-width:900px">
+        <thead><tr>
+          <th>Wk</th><th>Dates</th><th>Country</th><th>City</th>
+          <th class="l">Tournament</th><th class="l">Course</th><th>Status</th>${canEdit?"<th></th>":""}
+        </tr></thead>
+        <tbody id="srows"></tbody>
+      </table>
+    </div>
+    ${canEdit?`<div class="gridtools">
+      <button class="btn btn-ghost btn-sm" id="addweek">+ Add week</button>
+      <div class="savebar" style="margin-left:auto">
+        <span class="savestate" id="sstate"></span>
+        <button class="btn btn-primary btn-sm" id="ssave">Save season</button>
+      </div></div>`:""}`;
+
+  document.getElementById("yrsel").onchange=e=>{ seasonYear=+e.target.value; seasonScreen(v); };
+
+  let rows=(weeks||[]).map(w=>({...w,_dirty:false}));
+  function drawSeason(){
+    const tb=document.getElementById("srows"); tb.innerHTML="";
+    rows.forEach((w,i)=>{
+      const tr=document.createElement("tr");
+      const ti=(f,val,w2)=>canEdit
+        ? `<input class="cell-txt" data-i="${i}" data-f="${f}" value="${esc(val||"")}" style="min-width:${w2||110}px">`
+        : `<span class="auto" style="text-align:left;display:block">${val?esc(val):"—"}</span>`;
+      tr.innerHTML=`
+        <td style="text-align:center; color:var(--muted); font-weight:700">${w.week}</td>
+        <td style="text-align:center; font-size:12px; color:var(--muted); white-space:nowrap">${fmt(w.start_date)} – ${fmt(w.end_date)}</td>
+        <td style="text-align:center">${ti("country",w.country,90)}</td>
+        <td>${ti("city",w.city,110)}</td>
+        <td>${ti("tournament",w.tournament,160)}</td>
+        <td>${ti("course",w.course,140)}</td>
+        <td style="text-align:center">${canEdit
+          ? `<select class="drillsel" data-i="${i}" data-f="status" style="min-width:120px">
+               ${["Tournament","Off","Unknown"].map(o=>`<option ${o===w.status?'selected':''}>${o}</option>`).join("")}
+             </select>`
+          : `<span class="pill ${stPill[w.status]||'p-Technical'}">${esc(w.status)}</span>`}</td>
+        ${canEdit?`<td style="text-align:center"><button class="rowdel" data-i="${i}">×</button></td>`:""}`;
+      tb.appendChild(tr);
+    });
+    if(!canEdit) return;
+    tb.querySelectorAll("input.cell-txt").forEach(inp=>inp.oninput=()=>{
+      rows[+inp.dataset.i][inp.dataset.f]=inp.value; rows[+inp.dataset.i]._dirty=true;
+      document.getElementById("sstate").textContent="Unsaved changes";
+    });
+    tb.querySelectorAll("select[data-f=status]").forEach(sel=>sel.onchange=()=>{
+      rows[+sel.dataset.i].status=sel.value; rows[+sel.dataset.i]._dirty=true;
+      document.getElementById("sstate").textContent="Unsaved changes";
+    });
+    tb.querySelectorAll(".rowdel").forEach(b=>b.onclick=async()=>{
+      const r=rows[+b.dataset.i];
+      if(r.id) await sb.from("season_weeks").delete().eq("id",r.id);
+      rows.splice(+b.dataset.i,1); drawSeason();
+    });
+  }
+  drawSeason();
+
+  if(canEdit){
+    document.getElementById("addweek").onclick=()=>{
+      const nw=rows.length?Math.max(...rows.map(r=>r.week))+1:1;
+      rows.push({id:null,player_id:me.id,year:seasonYear,week:nw,start_date:null,end_date:null,
+        country:"",city:"",tournament:"",course:"",status:"Unknown",_dirty:true});
+      drawSeason();
+    };
+    document.getElementById("addyear").onclick=async()=>{
+      const y=prompt("Add which year?", String(seasonYear+1));
+      if(!y||isNaN(+y)) return;
+      const {error}=await sb.from("season_weeks").insert({player_id:me.id,year:+y,week:1,status:"Unknown"});
+      if(error){ flash(error.message); return; }
+      seasonYear=+y; flash("Year added"); seasonScreen(v);
+    };
+    document.getElementById("ssave").onclick=async()=>{
+      const st=document.getElementById("sstate"); st.textContent="Saving…";
+      let ok=true;
+      for(const r of rows){
+        if(!r._dirty) continue;
+        const payload={player_id:me.id,year:seasonYear,week:r.week,start_date:r.start_date,end_date:r.end_date,
+          country:r.country||null,city:r.city||null,tournament:r.tournament||null,course:r.course||null,status:r.status||"Unknown"};
+        const res=r.id ? await sb.from("season_weeks").update(payload).eq("id",r.id)
+                       : await sb.from("season_weeks").insert(payload).select("id").single();
+        if(res.error){ ok=false; flash(res.error.message); break; }
+        if(res.data?.id) r.id=res.data.id;
+        r._dirty=false;
+      }
+      st.textContent=ok?"Saved":"Save failed"; if(ok)flash("Season saved");
+    };
+  }
+}
+
+/* ============================================================
+   11. TEAM — you grant viewer access
+   ============================================================ */
+async function teamScreen(v){
+  v.innerHTML=`
+    <div class="card">
+      <h3 style="font-size:15px; text-transform:uppercase; letter-spacing:.02em; margin-bottom:10px">Give someone access</h3>
+      <p style="font-size:12px; color:var(--muted); margin:0 0 12px">They sign up first (choosing <b>Viewer</b>), then you add the email they used. Viewers can see your sheet, week, schedule and season — and comment on drills — but can't change anything.</p>
+      <div class="inline"><input id="vemail" placeholder="coach@email.com" style="flex:1"><button class="btn btn-primary btn-sm" id="vadd">Give access</button></div>
+    </div>
+    <div class="sec-h"><h2>Your team</h2></div>
+    <div class="card" id="vlist"><div class="load">Loading</div></div>`;
+  document.getElementById("vadd").onclick=async()=>{
+    const email=val("vemail").toLowerCase();
+    const {data:found}=await sb.rpc("find_profile_by_email",{e:email});
+    if(!found){ flash("No account with that email"); return; }
+    const {error}=await sb.from("player_viewers").insert({player_id:me.id,viewer_id:found});
+    if(error){ flash(error.message.includes("duplicate")?"Already has access":error.message); return; }
+    flash("Access granted"); document.getElementById("vemail").value=""; teamScreen(v);
+  };
+  const {data}=await sb.from("player_viewers")
+    .select("id, viewer_id, profiles!player_viewers_viewer_id_fkey(full_name, role)").eq("player_id",me.id);
+  const box=document.getElementById("vlist");
+  if(!data?.length){ box.innerHTML=`<div class="empty">Nobody has access yet.</div>`; return; }
+  box.innerHTML=data.map(x=>`
+    <div class="row-item">
+      <span class="pill p-Technical">${esc(x.profiles?.role||"viewer")}</span>
+      <div class="name">${esc(x.profiles?.full_name||"—")}</div>
+      <button class="rowdel" data-id="${x.id}" title="Remove access">×</button>
+    </div>`).join("");
+  box.querySelectorAll(".rowdel").forEach(b=>b.onclick=async()=>{
+    await sb.from("player_viewers").delete().eq("id",b.dataset.id); teamScreen(v);
+  });
 }
 
 /* ============================================================

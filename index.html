@@ -213,13 +213,23 @@ let activeDay = new Date().toISOString().slice(0,10);
 let drillMap = {};          // id -> drill
 let gridRows = [];          // working copy of the day's rows
 
-/* remember where the page was scrolled so re-rendering a view
-   doesn't throw you back to the top */
+/* Keep the page where it was across a re-render.
+   Views are async — content lands after the promise resolves and after
+   the browser paints — so restore on several frames rather than once. */
+let _scrollLock=null;
 function keepScroll(fn){
-  const y = window.scrollY;
-  const r = fn();
-  const restore = ()=>window.scrollTo(0,y);
-  if(r && typeof r.then==="function"){ r.then(restore); } else { restore(); }
+  const y = window.scrollY || document.documentElement.scrollTop || 0;
+  _scrollLock = y;
+  const restore = ()=>{ if(_scrollLock!=null) window.scrollTo(0,_scrollLock); };
+  let r;
+  try { r = fn(); } catch(e) { _scrollLock=null; throw e; }
+  const finish = ()=>{
+    restore();
+    requestAnimationFrame(()=>{ restore();
+      requestAnimationFrame(()=>{ restore(); setTimeout(()=>{ restore(); _scrollLock=null; },60); });
+    });
+  };
+  if(r && typeof r.then==="function"){ r.then(finish, finish); } else { finish(); }
   return r;
 }
 
@@ -296,6 +306,7 @@ sb.auth.onAuthStateChange(()=>boot());
    4. SHELL + TABS
    ============================================================ */
 let currentTab=null;
+let _tabScrollX=0;
 function shell(){
   const tabs = me.role==="coach"
     ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["players","Players"],["library","Drills"],["progress","Progress"]]
@@ -317,7 +328,14 @@ function shell(){
       <div id="tabview"></div>
     </div>`;
   document.getElementById("signout").onclick=()=>sb.auth.signOut();
-  app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{currentTab=b.dataset.tab; shell();});
+  const nav=app.querySelector("nav.tabs");
+  if(nav && _tabScrollX) nav.scrollLeft=_tabScrollX;
+  app.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>{
+    const n=app.querySelector("nav.tabs");
+    _tabScrollX = n?n.scrollLeft:0;
+    currentTab=b.dataset.tab;
+    keepScroll(()=>shell());
+  });
   renderTab();
 }
 function renderTab(){
@@ -1361,6 +1379,7 @@ function sgColor(v){ if(v==null) return "var(--muted)"; return v>=0.5?"#6fd8ab":
 function sgFmt(v){ return v==null?"—":((v>0?"+":"")+Number(v).toFixed(2)); }
 
 let resultsView = "list";
+let _rvScrollX = 0;
 let corrWindow = 8;
 
 async function resultsScreen(v){
@@ -1386,7 +1405,14 @@ async function resultsScreen(v){
     </div>
     <div id="resbody"></div>`;
 
-  v.querySelectorAll(".rv").forEach(b=>b.onclick=()=>{ resultsView=b.dataset.v; keepScroll(()=>resultsScreen(v)); });
+  const rvb=v.querySelector(".rvbar");
+  if(rvb && _rvScrollX) rvb.scrollLeft=_rvScrollX;
+  v.querySelectorAll(".rv").forEach(b=>b.onclick=()=>{
+    const bar=v.querySelector(".rvbar");
+    _rvScrollX = bar?bar.scrollLeft:0;
+    resultsView=b.dataset.v;
+    keepScroll(()=>resultsScreen(v));
+  });
   if(isOwner){
     document.getElementById("dgsetup").onclick=()=>dgSetup(settings,v);
     const rf=document.getElementById("dgrefresh");

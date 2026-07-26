@@ -362,6 +362,27 @@ function renderTab(){
 /* ============================================================
    5. THE SHEET — shared day grid with lookup-on-select
    ============================================================ */
+const READY_STYLE={
+  green:{ac:"#6fd8ab", bg:"rgba(111,216,171,.12)", word:"Push"},
+  yellow:{ac:"#e0b46f", bg:"rgba(224,180,111,.12)", word:"Moderate"},
+  red:{ac:"#e0864f", bg:"rgba(224,134,79,.12)", word:"Recover"}
+};
+
+/* Shows the band only — never the score. Returns "" if nothing shared. */
+async function readinessLine(pid, day, isOwner){
+  const {data}=await sb.from("daily_readiness").select("*")
+    .eq("player_id",pid).eq("day",day).maybeSingle();
+  if(!data || !data.band) return "";
+  const st=READY_STYLE[data.band]||READY_STYLE.yellow;
+  return `<div style="display:flex; align-items:center; gap:10px; padding:9px 13px; margin-bottom:12px;
+       background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:0 8px 8px 0">
+    <span style="width:10px; height:10px; border-radius:50%; background:${st.ac}; flex-shrink:0"></span>
+    <span style="font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em">Readiness today</span>
+    <span style="font-size:14px; font-weight:800; color:${st.ac}">${st.word}</span>
+    ${isOwner&&data.score!=null?`<span style="margin-left:auto; font-size:12px; color:var(--faint)">${data.score}/100 · only you see this</span>`:""}
+  </div>`;
+}
+
 async function dayScreen(v){
   if(me.role==="coach" && !players.length){
     v.innerHTML=`<div class="empty">No players linked yet. Open <b>Players</b> to add one by email.</div>`;
@@ -375,7 +396,11 @@ async function dayScreen(v){
         </select></div>`
     : `<div class="who">Your sheet, <b>${esc(me.full_name||"")}</b></div>`;
 
+  const readyHtml = await readinessLine(
+    (me.role==="player"?me.id:activePlayerId), activeDay, me.role==="player");
+
   v.innerHTML=`
+    ${readyHtml}
     <div class="daybar">
       <button class="btn btn-ghost btn-sm" id="dprev">‹</button>
       <div class="dsel"><span class="who">Day</span><input type="date" id="daycell" value="${activeDay}"></div>
@@ -568,14 +593,27 @@ function totals(){
   set("t-time",Math.round(tt)); set("t-balls",Math.round(tb));
   set("t-ment",mc?tm.toFixed(1):"0"); set("t-phys",tp.toFixed(1));
 }
-function markDirty(){ const s=document.getElementById("savestate"); if(s)s.textContent="Unsaved changes"; }
+let _saveTimer=null, _saving=false;
+function markDirty(){
+  const s=document.getElementById("savestate"); if(s)s.textContent="Unsaved changes";
+  scheduleAutosave();
+}
+function scheduleAutosave(){
+  clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(()=>{ saveDay(true); }, 1200);   // save 1.2s after you stop
+}
 
-async function saveDay(){
+async function saveDay(quiet){
+  if(_saving) return;
+  // nothing to do if no row is dirty
+  if(quiet && !gridRows.some(r=>r._dirty)) return;
+  _saving=true;
   const s=document.getElementById("savestate"); if(s)s.textContent="Saving…";
   let ok=true;
   for(let i=0;i<gridRows.length;i++){
     const r=gridRows[i];
     if(!r.drill_id && r.minutes==="" && r.balls==="" && !r.notes) continue; // skip empty rows
+    if(quiet && !r._dirty) continue; // autosave: only touch changed rows
     const payload={
       player_id:activePlayerId, created_by:me.id, drill_id:r.drill_id||null,
       logged_on:activeDay, sort:i,
@@ -586,11 +624,12 @@ async function saveDay(){
     let res;
     if(r.id){ res=await sb.from("sessions").update(payload).eq("id",r.id); }
     else{ res=await sb.from("sessions").insert(payload).select("id").single(); if(res.data)r.id=res.data.id; }
-    if(res.error){ ok=false; flash("Error: "+res.error.message); break; }
+    if(res.error){ ok=false; if(!quiet) flash("Error: "+res.error.message); break; }
     r._dirty=false;
   }
+  _saving=false;
   if(s)s.textContent=ok?"Saved":"Save failed";
-  if(ok)flash("Day saved");
+  if(ok && !quiet) flash("Day saved");
 }
 function num(x){ return x===""||x==null?null:(+x); }
 function int(x){ return x===""||x==null?0:Math.round(+x); }
@@ -2177,6 +2216,22 @@ async function progress(v){
   if(me.role==="coach" && players.length){ document.getElementById("ppick").onchange=e=>{ activePlayerId=e.target.value; progress(v); }; }
 }
 function stat(n,l){ return `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`; }
+
+/* Save immediately when the app goes to the background. On iOS, Safari
+   freezes or reloads the page when you switch apps, so a pending
+   autosave timer may never fire — flush it now. Only the day grid
+   holds unsaved-in-memory state. */
+function flushDaySave(){
+  try{
+    if(typeof gridRows!=="undefined" && Array.isArray(gridRows) && gridRows.some(r=>r&&r._dirty)){
+      clearTimeout(_saveTimer);
+      saveDay(true);
+    }
+  }catch(e){}
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flushDaySave(); });
+window.addEventListener("pagehide", flushDaySave);
+window.addEventListener("blur", flushDaySave);
 
 boot();
 </script>

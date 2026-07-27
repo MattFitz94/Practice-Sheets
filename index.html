@@ -218,6 +218,10 @@ function todayISO(){
 }
 let activeDay = todayISO();
 let drillMap = {};          // id -> drill
+async function refreshDrills(){
+  const {data}=await sb.from("drills").select("*");
+  drillMap={}; (data||[]).forEach(d=>drillMap[d.id]=d);
+}
 let gridRows = [];          // working copy of the day's rows
 
 /* Keep the page where it was across a re-render.
@@ -394,6 +398,7 @@ async function dayScreen(v){
     v.innerHTML=`<div class="empty">No players linked yet. Open <b>Players</b> to add one by email.</div>`;
     return;
   }
+  await refreshDrills();
   const drills=Object.values(drillMap).sort((a,b)=>a.name.localeCompare(b.name));
   const playerPicker = me.role==="coach"
     ? `<div class="dsel"><span class="who">Player</span>
@@ -659,6 +664,7 @@ async function weekScreen(v){
   if(me.role==="coach" && !players.length){
     v.innerHTML=`<div class="empty">No players linked yet. Open <b>Players</b> to add one.</div>`; return;
   }
+  await refreshDrills();
   const pid = me.role==="coach" ? (activePlayerId||players[0]?.id) : me.id;
   const mon = mondayOf(weekStart);
   const days=[...Array(7)].map((_,i)=>{ const d=new Date(mon); d.setDate(d.getDate()+i); return d; });
@@ -2257,7 +2263,7 @@ async function library(v){
       default_minutes:num(val("lt")), default_balls:num(val("lb")), distance:val("ld"),
       default_mental:num(val("lm")), default_physical:num(val("lp")), why:val("lw"), goal:val("lg")});
     if(error){ flash(error.message); return; }
-    flash("Drill added"); const {data:drills}=await sb.from("drills").select("*"); drillMap={}; (drills||[]).forEach(d=>drillMap[d.id]=d);
+    flash("Drill added"); await refreshDrills();
     ["ln","lk","lt","lb","ld","lm","lp","lw","lg"].forEach(i=>document.getElementById(i).value=""); loadLib();
   };
   loadLib();
@@ -2320,7 +2326,22 @@ async function library(v){
         flash("Save didn't take — this drill may belong to another account.");
         return;
       }
-      const {data:drills}=await sb.from("drills").select("*"); drillMap={}; (drills||[]).forEach(x=>drillMap[x.id]=x);
+      // apply the new defaults ONLY to sessions where the field is still blank,
+      // so anything you've actually logged is preserved
+      const newMins=num(val("e-t")), newBalls=num(val("e-b"));
+      const newMental=num(val("e-m")), newPhys=num(val("e-p"));
+      const {data:using}=await sb.from("sessions").select("id,minutes,balls,mental,physical")
+        .eq("player_id",me.id).eq("drill_id",d.id);
+      const blank=x=>x==null||x===""||(typeof x==="number"&&isNaN(x));
+      for(const row of (using||[])){
+        const patch={};
+        if(blank(row.minutes) && newMins!=null) patch.minutes=newMins;
+        if(blank(row.balls)   && newBalls!=null) patch.balls=newBalls;
+        if(blank(row.mental)  && newMental!=null) patch.mental=newMental;
+        if(blank(row.physical)&& newPhys!=null) patch.physical=newPhys;
+        if(Object.keys(patch).length) await sb.from("sessions").update(patch).eq("id",row.id);
+      }
+      await refreshDrills();
       flash("Drill updated"); close(); loadLib();
     };
     document.getElementById("e-del").onclick=async()=>{
@@ -2329,7 +2350,7 @@ async function library(v){
       if(error){ flash(error.message.includes("foreign")?"That drill is used in logged sessions — can't delete it.":error.message); return; }
       const { data:check }=await sb.from("drills").select("id").eq("id",d.id).maybeSingle();
       if(check){ flash("Delete didn't take — this drill may belong to another account."); return; }
-      const {data:drills}=await sb.from("drills").select("*"); drillMap={}; (drills||[]).forEach(x=>drillMap[x.id]=x);
+      await refreshDrills();
       flash("Drill deleted"); close(); loadLib();
     };
   }

@@ -318,7 +318,7 @@ function shell(){
     ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["players","Players"],["library","Drills"],["progress","Progress"]]
     : me.role==="viewer"
     ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["progress","Progress"]]
-    : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build Day"],["season","Season"],["results","Results"],["team",pendingCount?`Team (${pendingCount})`:"Team"],["progress","Progress"]];
+    : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build Day"],["library","Drills"],["season","Season"],["results","Results"],["team",pendingCount?`Team (${pendingCount})`:"Team"],["progress","Progress"]];
   if(!currentTab) currentTab=tabs[0][0];
   app.innerHTML=`
     <header><div class="wrap">
@@ -831,57 +831,45 @@ function layoutDay(items, drills, dayStart){
 function renderTimeline(layout, opts){
   const {blocks, gaps, overlaps} = layout;
   const START=DAY_START_MIN, END=DAY_END_MIN;
-  const PXPM=0.62;                 // pixels per minute (base scale)
-  const MIN_BLOCK=52;              // a block never shorter than this (fits 2 lines + time)
-  const LABEL_W=46;                // width of the hour gutter
+  const PXPM=1.15;                 // pixels per minute — taller so short blocks have room
+  const LABEL_W=46;
+  const totalH=(END-START)*PXPM;
+  const y = m => (m-START)*PXPM;
 
-  // Build a merged, time-sorted list of blocks + gaps, then lay them out
-  // sequentially so nothing overlaps. Each item gets at least MIN_BLOCK px;
-  // if its true duration is taller, it keeps that height.
-  const items=[];
-  blocks.forEach(b=>items.push({type:"block", s:b.s, e:b.e, b}));
-  gaps.forEach(g=>items.push({type:"gap", s:g.s, e:g.e}));
-  items.sort((x,y2)=>x.s-y2.s || x.e-y2.e);
-
-  // assign vertical positions: start at the time-proportional spot, but never
-  // above the bottom of the previous item (so back-to-back items stack cleanly)
-  let cursor=0;
-  const positioned=items.map(it=>{
-    const idealTop=(it.s-START)*PXPM;
-    const top=Math.max(idealTop, cursor);
-    const naturalH=(it.e-it.s)*PXPM;
-    const h=Math.max(naturalH, MIN_BLOCK);
-    cursor=top+h+4;                // 4px gap between items
-    return {...it, top, h};
-  });
-  const totalH=Math.max(cursor+10, (END-START)*PXPM);
-
-  // hour lines down the left
+  // hour lines
   let hours="";
   for(let h=5; h<=22; h++){
-    const top=(h*60-START)*PXPM;
+    const top=y(h*60);
     hours+=`<div style="position:absolute; top:${top}px; left:0; width:${LABEL_W-4}px; font-size:10px; color:var(--faint); transform:translateY(-6px); text-align:right">${String(h).padStart(2,"0")}:00</div>
             <div style="position:absolute; top:${top}px; left:${LABEL_W}px; right:0; border-top:1px solid var(--line); opacity:.3"></div>`;
   }
 
-  const els=positioned.map(it=>{
-    if(it.type==="gap"){
-      return `<div style="position:absolute; top:${it.top}px; height:${it.h}px; left:${LABEL_W+6}px; right:2px;
-          border:1px dashed var(--line); border-radius:6px; display:flex; align-items:center; justify-content:center">
-        <span style="font-size:10px; color:var(--faint); letter-spacing:.05em">FREE · ${durLabel(it.e-it.s)}</span></div>`;
-    }
-    const b=it.b, st=KIND_STYLE[b.kind]||KIND_STYLE.other;
-    const roomy = it.h>78;         // enough space to list drills
+  // gaps sit exactly on their time span
+  const gapEls = gaps.map(g=>{
+    const top=y(g.s), h=Math.max(y(g.e)-y(g.s),18);
+    return `<div style="position:absolute; top:${top}px; height:${h}px; left:${LABEL_W+6}px; right:2px;
+        border:1px dashed var(--line); border-radius:6px; display:flex; align-items:center; justify-content:center">
+      <span style="font-size:10px; color:var(--faint); letter-spacing:.05em">FREE · ${durLabel(g.e-g.s)}</span></div>`;
+  }).join("");
+
+  // blocks sit exactly on their time span. Height = true duration.
+  // Content shown scales to available height so nothing overflows into the next.
+  const blockEls = blocks.map(b=>{
+    const st=KIND_STYLE[b.kind]||KIND_STYLE.other;
+    const top=y(b.s), realH=y(b.e)-y(b.s);
+    const h=Math.max(realH,20);
+    const roomForDrills = realH>96;      // only list drills when the block is genuinely tall
+    const roomForNote   = realH>40;
     const clickable = opts.linkPractice && b.kind==="practice";
-    return `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${it.top}px; min-height:${it.h}px; left:${LABEL_W+6}px; right:2px;
-        background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:7px; padding:7px 10px; overflow:hidden; ${clickable?"cursor:pointer":""}">
+    return `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${top}px; height:${h}px; left:${LABEL_W+6}px; right:2px;
+        background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:7px; padding:6px 10px; overflow:hidden; ${clickable?"cursor:pointer":""}">
       <div style="display:flex; justify-content:space-between; gap:8px; align-items:baseline">
         <span style="font-size:13px; font-weight:700; color:var(--ink)">${esc(b.label||st.label)}${b.is_private?' <span style="font-size:9px;color:var(--faint)">PRIVATE</span>':''}</span>
         <span style="font-size:11px; color:${st.ac}; font-weight:700; white-space:nowrap">${m2t(b.s)}–${m2t(b.e)}</span>
       </div>
-      ${b.note?`<div style="font-size:10px; color:var(--muted); margin-top:1px">${esc(b.note)}</div>`:""}
-      ${roomy&&b.drills?`<div style="font-size:11px; color:var(--muted); margin-top:5px; line-height:1.5">${b.drills.map(d=>esc(d.name)+" · "+(d.minutes||0)+"m").join("<br>")}</div>`:""}
-      ${clickable&&roomy?`<div style="font-size:10px; color:${st.ac}; margin-top:5px">Open on the sheet →</div>`:""}
+      ${roomForNote&&b.note?`<div style="font-size:10px; color:var(--muted); margin-top:1px">${esc(b.note)}</div>`:""}
+      ${roomForDrills&&b.drills?`<div style="font-size:11px; color:var(--muted); margin-top:5px; line-height:1.5">${b.drills.map(d=>esc(d.name)+" · "+(d.minutes||0)+"m").join("<br>")}</div>`:""}
+      ${clickable&&roomForDrills?`<div style="font-size:10px; color:${st.ac}; margin-top:5px">Open on the sheet →</div>`:""}
     </div>`;
   }).join("");
 
@@ -897,7 +885,7 @@ function renderTimeline(layout, opts){
   </div>`;
 
   return warn+unplaced+legend+
-    `<div class="gridwrap" style="padding:10px 8px 10px 4px"><div style="position:relative; height:${totalH}px">${hours}${els}</div></div>`;
+    `<div class="gridwrap" style="padding:10px 8px 10px 4px"><div style="position:relative; height:${totalH}px">${hours}${gapEls}${blockEls}</div></div>`;
 }
 
 /* ============================================================
@@ -1163,6 +1151,13 @@ async function buildScreen(v){
 
   function renderBuildList(){
     const box=document.getElementById("blist");
+    // default the add-row start to the end of the last fixed item (rounded to :15),
+    // so you can chain commitments without re-picking the time each time
+    let defTime="13:00";
+    if(anchors.length){
+      const last=anchors.map(i=>t2m(i.start_time)+(i.duration_mins||0)).filter(x=>!isNaN(x)).sort((a,b)=>b-a)[0];
+      if(last!=null){ const r=Math.ceil(last/15)*15; if(r<DAY_END_MIN) defTime=m2t(r); }
+    }
     // the always-present inline add row at the top
     const addRow = `
       <div style="display:flex; gap:6px; align-items:center; padding:9px; background:var(--panel-2);
@@ -1170,7 +1165,7 @@ async function buildScreen(v){
         <select id="a-kind" style="flex:1; min-width:90px">
           <option value="media">Media</option><option value="travel">Travel</option>
           <option value="gym">Gym</option><option value="other">Other</option></select>
-        <select id="a-time" style="flex:1; min-width:80px">${timeOptions("13:00")}</select>
+        <select id="a-time" style="flex:1; min-width:80px">${timeOptions(defTime)}</select>
         <select id="a-mins" style="flex:1; min-width:70px">
           ${[15,30,45,60,90,120,180,240].map(m=>`<option value="${m}" ${m===45?"selected":""}>${durLabel(m)}</option>`).join("")}
         </select>
@@ -2265,11 +2260,62 @@ async function library(v){
     const box=document.getElementById("llist"); document.getElementById("lcount").textContent=(data?.length||0)+" drills";
     if(!data?.length){ box.innerHTML=`<div class="empty">No drills yet — add your first above.</div>`; return; }
     box.innerHTML=data.map(d=>`
-      <div class="row-item">
+      <div class="row-item ledit" data-id="${d.id}" style="cursor:pointer">
         <span class="pill ${pillClass(d.category)}">${esc(d.category)}</span>
         <div class="name">${esc(d.name)}<small>${[d.default_club,d.distance,d.goal].filter(Boolean).map(esc).join(" · ")||"—"}</small></div>
         <span class="meta">${d.default_minutes||0}m · ${d.default_balls||0}b</span>
       </div>`).join("");
+    box.querySelectorAll(".ledit").forEach(el=>el.onclick=()=>editDrill(data.find(x=>x.id===el.dataset.id)));
+  }
+
+  function editDrill(d){
+    if(!d) return;
+    const wrap=document.createElement("div"); wrap.className="cmodal";
+    wrap.innerHTML=`<div class="cbox">
+      <div class="chead"><div><b>Edit drill</b><div class="who">${esc(d.name)}</div></div>
+        <button class="cx" id="edx">×</button></div>
+      <div class="clist" style="padding:14px 16px">
+        <div class="field"><label class="mini">Name</label><input id="e-n" value="${esc(d.name||"")}"></div>
+        <div class="grid2" style="margin-top:8px">
+          <div><label class="mini">Category</label><select id="e-c">${CATS.map(c=>`<option ${c===d.category?"selected":""}>${c}</option>`).join("")}</select></div>
+          <div><label class="mini">Default club(s)</label><input id="e-k" value="${esc(d.default_club||"")}"></div>
+        </div>
+        <div class="grid3" style="margin-top:8px">
+          <div><label class="mini">Def. time</label><input id="e-t" type="number" value="${d.default_minutes??""}"></div>
+          <div><label class="mini">Def. balls</label><input id="e-b" type="number" value="${d.default_balls??""}"></div>
+          <div><label class="mini">Distance</label><input id="e-d" value="${esc(d.distance||"")}"></div>
+        </div>
+        <div class="grid3" style="margin-top:8px">
+          <div><label class="mini">Def. mental</label><input id="e-m" type="number" step="0.5" value="${d.default_mental??""}"></div>
+          <div><label class="mini">Def. phys</label><input id="e-p" type="number" step="0.5" value="${d.default_physical??""}"></div>
+          <div><label class="mini">Why</label><input id="e-w" value="${esc(d.why||"")}"></div>
+        </div>
+        <div class="field" style="margin-top:8px"><label class="mini">Goal / pass criteria</label><input id="e-g" value="${esc(d.goal||"")}"></div>
+      </div>
+      <div class="cfoot">
+        <button class="btn btn-ghost btn-sm" id="e-del">Delete</button>
+        <button class="btn btn-primary btn-sm" id="e-save" style="margin-left:auto">Save changes</button></div>
+    </div>`;
+    document.body.appendChild(wrap);
+    const close=()=>wrap.remove();
+    wrap.onclick=e=>{ if(e.target===wrap) close(); };
+    document.getElementById("edx").onclick=close;
+    document.getElementById("e-save").onclick=async()=>{
+      const {error}=await sb.from("drills").update({
+        name:val("e-n"), category:val("e-c"), default_club:val("e-k"),
+        default_minutes:num(val("e-t")), default_balls:num(val("e-b")), distance:val("e-d"),
+        default_mental:num(val("e-m")), default_physical:num(val("e-p")), why:val("e-w"), goal:val("e-g")
+      }).eq("id",d.id);
+      if(error){ flash(error.message); return; }
+      const {data:drills}=await sb.from("drills").select("*"); drillMap={}; (drills||[]).forEach(x=>drillMap[x.id]=x);
+      flash("Drill updated"); close(); loadLib();
+    };
+    document.getElementById("e-del").onclick=async()=>{
+      if(!confirm(`Delete "${d.name}"? This can't be undone. Sessions already logged with it are kept.`)) return;
+      const {error}=await sb.from("drills").delete().eq("id",d.id);
+      if(error){ flash(error.message.includes("foreign")?"That drill is used in logged sessions — can't delete it.":error.message); return; }
+      flash("Drill deleted"); close(); loadLib();
+    };
   }
 }
 

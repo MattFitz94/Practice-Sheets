@@ -239,7 +239,8 @@ function shownVal(row, dayISO, field, drillField){
   return blank ? "" : own;
 }
 
-async function refreshDrills(){
+async function refreshDrills(force){
+  if(!force && Object.keys(drillMap).length) return;   // use cache; drills rarely change
   const {data}=await sb.from("drills").select("*");
   drillMap={}; (data||[]).forEach(d=>drillMap[d.id]=d);
 }
@@ -1137,7 +1138,7 @@ async function buildScreen(v){
   const drills=(sess||[]).filter(x=>x.drills).map(x=>({name:x.drills.name,minutes:+x.minutes||0}));
   const totalPractice=drills.reduce((a,d)=>a+d.minutes,0);
   const practiceRow=(items||[]).find(i=>i.kind==="practice");
-  const anchors=(items||[]).filter(i=>i.kind!=="practice");
+  const anchors=(items||[]).filter(i=>i.kind!=="practice").sort((a,b)=>t2m(a.start_time)-t2m(b.start_time));
 
   v.innerHTML=`
     <div class="daybar">
@@ -1147,38 +1148,35 @@ async function buildScreen(v){
       <button class="btn btn-ghost btn-sm" id="btoday">Today</button>
     </div>
 
-    <!-- TEMPLATES -->
+    <!-- 1. PRACTICE START (top) -->
     <div class="card">
       <div class="inline" style="margin-bottom:10px">
-        <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin:0">Templates</h3>
-        <span class="who" style="margin-left:auto">Start from a saved day shape</span>
+        <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin:0">Practice start</h3>
+        <span class="who" style="margin-left:auto">${drills.length?`${durLabel(totalPractice)} · ${drills.length} drills`:"no drills yet"}</span>
       </div>
-      ${(templates||[]).length? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px">
-        ${templates.map(t=>`<button class="btn btn-ghost btn-sm tmpl" data-id="${t.id}">${esc(t.name)}</button>`).join("")}
-      </div>` : `<p class="who" style="margin:0 0 6px">No templates yet. Build a day below, then save it as one.</p>`}
-    </div>
-
-    <!-- PRACTICE START -->
-    <div class="card">
-      <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:10px">Practice</h3>
       ${drills.length?`
-        <div class="grid2">
-          <div><label class="mini">Start practice at</label><select id="pstart">${timeOptions(practiceRow?.start_time||"09:00")}</select></div>
-          <div><label class="mini">Total from the sheet</label><div style="padding:10px; color:var(--muted)">${durLabel(totalPractice)} · ${drills.length} drills</div></div>
+        <div class="inline" style="gap:8px">
+          <select id="pstart" style="flex:1">${timeOptions(practiceRow?.start_time||"09:00")}</select>
+          <button class="btn btn-primary btn-sm" id="psave">${practiceRow?"Update":"Set"}</button>
         </div>
-        <button class="btn btn-primary btn-sm" id="psave" style="margin-top:10px; width:100%">${practiceRow?"Update practice start":"Add practice to the day"}</button>
-      `:`<div class="empty" style="padding:16px">No drills on the Day Plan for this date. Add them there first and practice will appear here.</div>`}
+        <p class="who" style="margin:8px 0 0">Practice fills the gaps between your fixed items below.</p>
+      `:`<div class="empty" style="padding:14px">Add drills on the Day Plan first — practice time comes from there.</div>`}
     </div>
 
-    <!-- THE DAY, WITH INLINE VERTICAL ADD -->
-    <div class="sec-h"><h2>The day</h2></div>
+    <!-- 2. THE DAY + inline add (middle) -->
+    <div class="sec-h"><h2>Fixed items</h2></div>
     <div class="card" id="blist"></div>
 
-    <!-- SAVE AS TEMPLATE -->
-    ${(items||[]).length?`
-    <button class="btn btn-ghost btn-sm" id="savetmpl" style="width:100%; margin-top:4px">Save this day as a template</button>`:""}`;
+    <!-- 3. TEMPLATES (bottom) -->
+    <div class="sec-h"><h2>Templates</h2></div>
+    <div class="card">
+      ${(templates||[]).length? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:${(items||[]).length?"10px":"0"}">
+        ${templates.map(t=>`<button class="btn btn-ghost btn-sm tmpl" data-id="${t.id}">${esc(t.name)}</button>`).join("")}
+      </div>` : `<p class="who" style="margin:0 0 ${(items||[]).length?"10px":"0"}">No templates yet.</p>`}
+      ${(items||[]).length?`<button class="btn btn-ghost btn-sm" id="savetmpl" style="width:100%">Save this day as a template</button>`:""}
+    </div>`;
 
-  const shift=n=>{ const d=new Date(schedDay+"T00:00:00"); d.setDate(d.getDate()+n); schedDay=d.toISOString().slice(0,10); keepScroll(()=>buildScreen(v)); };
+  const shift=n=>{ const d=new Date(schedDay+"T00:00:00"); d.setDate(d.getDate()+n); schedDay=isoDate(d); keepScroll(()=>buildScreen(v)); };
   document.getElementById("bprev").onclick=()=>shift(-1);
   document.getElementById("bnext").onclick=()=>shift(1);
   document.getElementById("btoday").onclick=()=>{ schedDay=todayISO(); keepScroll(()=>buildScreen(v)); };
@@ -1194,10 +1192,9 @@ async function buildScreen(v){
     flash("Practice set"); keepScroll(()=>buildScreen(v));
   };
 
-  // apply a template to this day
   v.querySelectorAll(".tmpl").forEach(b=>b.onclick=async()=>{
     const t=(templates||[]).find(x=>x.id===b.dataset.id); if(!t) return;
-    if(!confirm(`Apply "${t.name}" to ${schedDay}? This adds its items to the day.`)) return;
+    if(!confirm(`Apply "${t.name}" to ${schedDay}?`)) return;
     const rows=(t.items||[]).map(it=>({
       player_id:me.id, day:schedDay, kind:it.kind, label:it.label||null,
       start_time:it.start_time||null, duration_mins:it.duration_mins||0,
@@ -1205,22 +1202,17 @@ async function buildScreen(v){
     }));
     if(t.practice_start && !rows.some(r=>r.kind==="practice"))
       rows.push({player_id:me.id, day:schedDay, kind:"practice", label:"Practice", start_time:t.practice_start, is_anchor:false});
-    if(rows.length){
-      const {error}=await sb.from("schedule_items").insert(rows);
-      if(error){ flash(error.message); return; }
-    }
+    if(rows.length){ const {error}=await sb.from("schedule_items").insert(rows); if(error){ flash(error.message); return; } }
     flash(`Applied ${t.name}`); keepScroll(()=>buildScreen(v));
   });
 
-  // save current day as a template
-  const st=document.getElementById("savetmpl");
-  if(st) st.onclick=async()=>{
+  const stmpl=document.getElementById("savetmpl");
+  if(stmpl) stmpl.onclick=async()=>{
     const name=prompt("Name this template (e.g. Tournament day, Range day):");
     if(!name) return;
     const tItems=anchors.map(i=>({kind:i.kind, label:i.label, start_time:i.start_time, duration_mins:i.duration_mins, is_private:i.is_private}));
     const {error}=await sb.from("day_templates").insert({
-      player_id:me.id, name, practice_start:practiceRow?.start_time||null, items:tItems,
-      sort:(templates||[]).length });
+      player_id:me.id, name, practice_start:practiceRow?.start_time||null, items:tItems, sort:(templates||[]).length });
     if(error){ flash(error.message); return; }
     flash(`Saved "${name}"`); keepScroll(()=>buildScreen(v));
   };
@@ -1229,49 +1221,49 @@ async function buildScreen(v){
 
   function renderBuildList(){
     const box=document.getElementById("blist");
-    // default the add-row start to the end of the last fixed item (rounded to :15),
-    // so you can chain commitments without re-picking the time each time
+    // default the add-row start to the end of the last fixed item (rounded to :15)
     let defTime="13:00";
     if(anchors.length){
       const last=anchors.map(i=>t2m(i.start_time)+(i.duration_mins||0)).filter(x=>!isNaN(x)).sort((a,b)=>b-a)[0];
       if(last!=null){ const r=Math.ceil(last/15)*15; if(r<DAY_END_MIN) defTime=m2t(r); }
     }
-    // the always-present inline add row at the top
+
+    // the day, in time order, each row editable inline
+    const dayRows = anchors.length ? anchors.map(it=>{
+      const st=KIND_STYLE[it.kind]||KIND_STYLE.other;
+      const end = it.start_time ? m2t(t2m(it.start_time)+(it.duration_mins||0)) : "";
+      return `<div class="row-item" style="border-left:3px solid ${st.ac}; padding-left:10px">
+        <span class="pill" style="background:${st.bg}; color:${st.ac}">${st.label}</span>
+        <div class="name">${esc(it.label||st.label)}
+          <small>${it.start_time||"—"}${end?" – "+end:""} · ${durLabel(it.duration_mins||0)}${it.is_private?" · private":""}</small></div>
+        <button class="rowdel" data-id="${it.id}" title="Remove" style="font-size:20px; padding:0 8px">×</button>
+      </div>`;
+    }).join("") : `<div class="empty" style="border:0; padding:14px">No fixed items yet. Add one below, or apply a template.</div>`;
+
+    // the inline + add row
     const addRow = `
-      <div style="display:flex; gap:6px; align-items:center; padding:9px; background:var(--panel-2);
-           border:1px dashed var(--blood-2); border-radius:8px; margin-bottom:10px; flex-wrap:wrap">
-        <select id="a-kind" style="flex:1; min-width:90px">
+      <div style="display:flex; gap:6px; align-items:center; padding:10px; background:var(--panel-2);
+           border:1px dashed var(--blood-2); border-radius:9px; margin-top:10px; flex-wrap:wrap">
+        <span style="font-size:20px; color:var(--blood-2); font-weight:700; line-height:1">+</span>
+        <select id="a-kind" style="flex:1; min-width:88px">
           <option value="media">Media</option><option value="travel">Travel</option>
           <option value="gym">Gym</option><option value="other">Other</option></select>
-        <select id="a-time" style="flex:1; min-width:80px">${timeOptions(defTime)}</select>
+        <select id="a-time" style="flex:1; min-width:78px">${timeOptions(defTime)}</select>
         <select id="a-mins" style="flex:1; min-width:70px">
           ${[15,30,45,60,90,120,180,240].map(m=>`<option value="${m}" ${m===45?"selected":""}>${durLabel(m)}</option>`).join("")}
         </select>
-        <input id="a-label" placeholder="Label (optional)" style="flex:2; min-width:120px">
+        <input id="a-label" placeholder="Label" style="flex:2; min-width:110px">
         <label class="inline" style="font-size:12px; color:var(--muted); flex:0 0 auto"><input type="checkbox" id="a-priv" style="width:auto"> Private</label>
         <button class="btn btn-primary btn-sm" id="a-add" style="flex:0 0 auto">Add</button>
       </div>`;
 
-    const list = !(items||[]).length
-      ? `<div class="empty" style="border:0">Nothing on this day yet — add above, or apply a template.</div>`
-      : items.map(it=>{
-          const st=KIND_STYLE[it.kind]||KIND_STYLE.other;
-          const mins = it.kind==="practice" ? totalPractice : (it.duration_mins||0);
-          return `<div class="row-item">
-            <span class="pill" style="background:${st.bg}; color:${st.ac}">${st.label}</span>
-            <div class="name">${esc(it.label||st.label)}
-              <small>${it.start_time||"—"}${mins?" – "+m2t(t2m(it.start_time)+mins):""} · ${durLabel(mins)}${it.is_private?" · private":""}</small></div>
-            <button class="rowdel" data-id="${it.id}" title="Remove" style="font-size:20px; padding:0 8px">×</button>
-          </div>`;
-        }).join("");
-
-    box.innerHTML = addRow + list;
+    box.innerHTML = dayRows + addRow;
 
     document.getElementById("a-add").onclick=async()=>{
       const kind=val("a-kind"), st2=t2m(val("a-time")), len=+val("a-mins")||0;
       const clash=anchors.filter(i=>i.start_time)
         .find(i=>{ const s2=t2m(i.start_time), e2=s2+(i.duration_mins||0); return st2 < e2 && (st2+len) > s2; });
-      if(clash && !confirm(`This overlaps "${clash.label||clash.kind}" at ${clash.start_time}. Add it anyway?`)) return;
+      if(clash && !confirm(`This overlaps "${clash.label||clash.kind}" at ${clash.start_time}. Add anyway?`)) return;
       const {error}=await sb.from("schedule_items").insert({
         player_id:me.id, day:schedDay, start_time:val("a-time"), duration_mins:len,
         kind, label:val("a-label")||null, is_private:document.getElementById("a-priv").checked, is_anchor:true });
@@ -2329,7 +2321,7 @@ async function library(v){
       default_minutes:num(val("lt")), default_balls:num(val("lb")), distance:val("ld"),
       default_mental:num(val("lm")), default_physical:num(val("lp")), why:val("lw"), goal:val("lg")});
     if(error){ flash(error.message); return; }
-    flash("Drill added"); await refreshDrills();
+    flash("Drill added"); await refreshDrills(true);
     ["ln","lk","lt","lb","ld","lm","lp","lw","lg"].forEach(i=>document.getElementById(i).value=""); loadLib();
   };
   loadLib();
@@ -2411,7 +2403,7 @@ async function library(v){
         if(newPhys!=null)   patch.physical=newPhys;
         if(Object.keys(patch).length) await sb.from("sessions").update(patch).eq("id",row.id);
       }
-      await refreshDrills();
+      await refreshDrills(true);
       flash("Drill updated"); close(); loadLib();
     };
     document.getElementById("e-del").onclick=async()=>{
@@ -2420,7 +2412,7 @@ async function library(v){
       if(error){ flash(error.message.includes("foreign")?"That drill is used in logged sessions — can't delete it.":error.message); return; }
       const { data:check }=await sb.from("drills").select("id").eq("id",d.id).maybeSingle();
       if(check){ flash("Delete didn't take — this drill may belong to another account."); return; }
-      await refreshDrills();
+      await refreshDrills(true);
       flash("Drill deleted"); close(); loadLib();
     };
   }

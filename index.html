@@ -2326,19 +2326,23 @@ async function library(v){
         flash("Save didn't take — this drill may belong to another account.");
         return;
       }
-      // apply the new defaults ONLY to sessions where the field is still blank,
-      // so anything you've actually logged is preserved
+      // Push new defaults onto PLANNED days (today or later, and not marked done).
+      // Past days and anything marked done are history — never overwritten.
       const newMins=num(val("e-t")), newBalls=num(val("e-b"));
       const newMental=num(val("e-m")), newPhys=num(val("e-p"));
-      const {data:using}=await sb.from("sessions").select("id,minutes,balls,mental,physical")
+      const today=todayISO();
+      const {data:using}=await sb.from("sessions")
+        .select("id,minutes,balls,mental,physical,logged_on,status,completed")
         .eq("player_id",me.id).eq("drill_id",d.id);
-      const blank=x=>x==null||x===""||(typeof x==="number"&&isNaN(x));
       for(const row of (using||[])){
+        const isDone = row.status==="done" || row.completed===true;
+        const isPast = row.logged_on < today;
+        if(isDone || isPast) continue;          // history — leave it
         const patch={};
-        if(blank(row.minutes) && newMins!=null) patch.minutes=newMins;
-        if(blank(row.balls)   && newBalls!=null) patch.balls=newBalls;
-        if(blank(row.mental)  && newMental!=null) patch.mental=newMental;
-        if(blank(row.physical)&& newPhys!=null) patch.physical=newPhys;
+        if(newMins!=null)   patch.minutes=newMins;
+        if(newBalls!=null)  patch.balls=newBalls;
+        if(newMental!=null) patch.mental=newMental;
+        if(newPhys!=null)   patch.physical=newPhys;
         if(Object.keys(patch).length) await sb.from("sessions").update(patch).eq("id",row.id);
       }
       await refreshDrills();

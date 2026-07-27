@@ -210,7 +210,13 @@ let me = null;              // {id, full_name, role}
 let players = [];           // coach: their linked players
 let activePlayerId = null;  // whose day the grid is showing
 let pendingCount = 0;       // people signed up but not yet linked
-let activeDay = new Date().toISOString().slice(0,10);
+/* Local calendar date as YYYY-MM-DD. Never use toISOString() for "today" —
+   that returns UTC and lands on the wrong day outside UTC. */
+function todayISO(){
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+let activeDay = todayISO();
 let drillMap = {};          // id -> drill
 let gridRows = [];          // working copy of the day's rows
 
@@ -437,10 +443,10 @@ async function dayScreen(v){
     document.getElementById("pcell").onchange=e=>{ activePlayerId=e.target.value; dayScreen(v); };
   }
   document.getElementById("daycell").onchange=e=>{ activeDay=e.target.value; dayScreen(v); };
-  const shiftDay=(n)=>{ const d=new Date(activeDay+"T00:00:00"); d.setDate(d.getDate()+n); activeDay=d.toISOString().slice(0,10); dayScreen(v); };
+  const shiftDay=(n)=>{ const d=new Date(activeDay+"T00:00:00"); d.setDate(d.getDate()+n); activeDay=isoDate(d); keepScroll(()=>dayScreen(v)); };
   document.getElementById("dprev").onclick=()=>shiftDay(-1);
   document.getElementById("dnext").onclick=()=>shiftDay(1);
-  document.getElementById("dtoday").onclick=()=>{ activeDay=new Date().toISOString().slice(0,10); dayScreen(v); };
+  document.getElementById("dtoday").onclick=()=>{ activeDay=todayISO(); keepScroll(()=>dayScreen(v)); };
   const arow=document.getElementById("addrow"); if(arow) arow.onclick=()=>{ gridRows.push(blankRow()); drawRows(drills); };
   const sgrid=document.getElementById("savegrid"); if(sgrid) sgrid.onclick=saveDay;
 
@@ -470,7 +476,7 @@ async function loadDay(){
   if(!gridRows.length) gridRows=[blankRow(),blankRow(),blankRow()];
 
   // If this day is in the past, anything never ticked counts as NOT completed.
-  const today=new Date().toISOString().slice(0,10);
+  const today=todayISO();
   if(activeDay < today){
     gridRows.forEach(r=>{
       if(r.drill_id && (!r.status || r.status==="pending")){ r.status="missed"; r._dirty=true; }
@@ -645,9 +651,9 @@ function mondayOf(dateStr){
 }
 function fmtDay(d){ return d.toLocaleDateString(undefined,{weekday:'short'}); }
 function fmtDate(d){ return d.toLocaleDateString(undefined,{day:'numeric',month:'short'}); }
-function isoDate(d){ return d.toISOString().slice(0,10); }
+function isoDate(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 
-let weekStart = isoDate(mondayOf(new Date().toISOString().slice(0,10)));
+let weekStart = isoDate(mondayOf(todayISO()));
 
 async function weekScreen(v){
   if(me.role==="coach" && !players.length){
@@ -683,7 +689,7 @@ async function weekScreen(v){
   const wt=document.getElementById("wthis");
   wp.onclick=(e)=>{ e.preventDefault(); goWeek(-7); };
   wn.onclick=(e)=>{ e.preventDefault(); goWeek(7); };
-  wt.onclick=(e)=>{ e.preventDefault(); weekStart=isoDate(mondayOf(new Date().toISOString().slice(0,10))); keepScroll(()=>weekScreen(v)); };
+  wt.onclick=(e)=>{ e.preventDefault(); weekStart=isoDate(mondayOf(todayISO())); keepScroll(()=>weekScreen(v)); };
   if(me.role==="coach"){ document.getElementById("wpick").onchange=e=>{ activePlayerId=e.target.value; weekScreen(v); }; }
 
   // pull the whole week in one query
@@ -701,7 +707,7 @@ async function weekScreen(v){
     const balls=list.reduce((a,s)=>a+(s.balls||0),0);
     const done=list.filter(s=>(s.status||(s.completed?"done":"pending"))==="done").length;
     const missed=list.filter(s=>(s.status||"pending")==="missed").length;
-    const isToday = key===new Date().toISOString().slice(0,10);
+    const isToday = key===todayISO();
     cols+=`
       <div style="min-width:150px; flex:1; border:1px solid var(--line); border-radius:var(--r); background:var(--panel); overflow:hidden">
         <div style="padding:8px 10px; background:${isToday?'var(--blood-2)':'var(--panel-2)'}; color:${isToday?'var(--lime-ink)':'var(--ink)'}">
@@ -891,7 +897,7 @@ function renderTimeline(layout, opts){
 /* ============================================================
    9. DAY SCHEDULE — yours to edit, team can view (bar private)
    ============================================================ */
-let schedDay = new Date().toISOString().slice(0,10);
+let schedDay = todayISO();
 
 /* ---- export a day (or the season) to calendar ---- */
 function icsEscape(t){ return String(t||"").replace(/[\\;,]/g,m=>"\\"+m).replace(/\n/g,"\\n"); }
@@ -965,10 +971,10 @@ async function scheduleScreen(v){
     </div>
     <div id="schedbody"></div>`;
 
-  const shift=n=>{ const d=new Date(schedDay+"T00:00:00"); d.setDate(d.getDate()+n); schedDay=d.toISOString().slice(0,10); scheduleScreen(v); };
+  const shift=n=>{ const d=new Date(schedDay+"T00:00:00"); d.setDate(d.getDate()+n); schedDay=isoDate(d); keepScroll(()=>scheduleScreen(v)); };
   document.getElementById("sprev").onclick=()=>shift(-1);
   document.getElementById("snext").onclick=()=>shift(1);
-  document.getElementById("stoday").onclick=()=>{ schedDay=new Date().toISOString().slice(0,10); scheduleScreen(v); };
+  document.getElementById("stoday").onclick=()=>{ schedDay=todayISO(); keepScroll(()=>scheduleScreen(v)); };
   document.getElementById("sday").onchange=e=>{ schedDay=e.target.value; scheduleScreen(v); };
   document.getElementById("sweek").onclick=()=>scheduleWeek(v);
   document.getElementById("sexport").onclick=()=>{
@@ -1023,7 +1029,7 @@ async function scheduleWeek(v){
     const drills=(allSess||[]).filter(x=>x.logged_on===dt&&x.drills).map(x=>({name:x.drills.name,minutes:+x.minutes||0}));
     const ds=t2m(items.find(i=>i.kind==="practice")?.start_time) ?? null;
     const lay=layoutDay(items,drills,ds);
-    const isToday=dt===new Date().toISOString().slice(0,10);
+    const isToday=dt===todayISO();
     const d=new Date(dt+"T00:00:00");
     const bl=lay.blocks.map(b=>{
       const st=KIND_STYLE[b.kind]||KIND_STYLE.other;
@@ -1103,7 +1109,7 @@ async function buildScreen(v){
   const shift=n=>{ const d=new Date(schedDay+"T00:00:00"); d.setDate(d.getDate()+n); schedDay=d.toISOString().slice(0,10); keepScroll(()=>buildScreen(v)); };
   document.getElementById("bprev").onclick=()=>shift(-1);
   document.getElementById("bnext").onclick=()=>shift(1);
-  document.getElementById("btoday").onclick=()=>{ schedDay=new Date().toISOString().slice(0,10); keepScroll(()=>buildScreen(v)); };
+  document.getElementById("btoday").onclick=()=>{ schedDay=todayISO(); keepScroll(()=>buildScreen(v)); };
   document.getElementById("bday").onchange=e=>{ schedDay=e.target.value; keepScroll(()=>buildScreen(v)); };
 
   const ps=document.getElementById("psave");
@@ -2301,19 +2307,26 @@ async function library(v){
     wrap.onclick=e=>{ if(e.target===wrap) close(); };
     document.getElementById("edx").onclick=close;
     document.getElementById("e-save").onclick=async()=>{
-      const {error}=await sb.from("drills").update({
+      const { data:updated, error }=await sb.from("drills").update({
         name:val("e-n"), category:val("e-c"), default_club:val("e-k"),
         default_minutes:num(val("e-t")), default_balls:num(val("e-b")), distance:val("e-d"),
         default_mental:num(val("e-m")), default_physical:num(val("e-p")), why:val("e-w"), goal:val("e-g")
-      }).eq("id",d.id);
+      }).eq("id",d.id).select();
       if(error){ flash(error.message); return; }
+      if(!updated || !updated.length){
+        flash("Couldn't save — this drill isn't owned by your account. Run claim_drills.sql once in Supabase.");
+        return;
+      }
+      // refresh the shared drill cache so Day Plan reflects the change immediately
       const {data:drills}=await sb.from("drills").select("*"); drillMap={}; (drills||[]).forEach(x=>drillMap[x.id]=x);
       flash("Drill updated"); close(); loadLib();
     };
     document.getElementById("e-del").onclick=async()=>{
       if(!confirm(`Delete "${d.name}"? This can't be undone. Sessions already logged with it are kept.`)) return;
-      const {error}=await sb.from("drills").delete().eq("id",d.id);
+      const { data:del, error }=await sb.from("drills").delete().eq("id",d.id).select();
       if(error){ flash(error.message.includes("foreign")?"That drill is used in logged sessions — can't delete it.":error.message); return; }
+      if(!del || !del.length){ flash("Couldn't delete — this drill isn't owned by your account. Run claim_drills.sql once in Supabase."); return; }
+      const {data:drills}=await sb.from("drills").select("*"); drillMap={}; (drills||[]).forEach(x=>drillMap[x.id]=x);
       flash("Drill deleted"); close(); loadLib();
     };
   }

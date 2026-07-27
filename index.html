@@ -347,10 +347,10 @@ let currentTab=null;
 let _tabScrollX=0;
 function shell(){
   const tabs = me.role==="coach"
-    ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["players","Players"],["library","Drills"],["progress","Progress"]]
+    ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["players","Players"],["library","Drills"],["technical","Technical"],["progress","Progress"]]
     : me.role==="viewer"
-    ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["progress","Progress"]]
-    : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build Day"],["library","Drills"],["season","Season"],["results","Results"],["team",pendingCount?`Team (${pendingCount})`:"Team"],["progress","Progress"]];
+    ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["technical","Technical"],["progress","Progress"]]
+    : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build Day"],["library","Drills"],["technical","Technical"],["season","Season"],["results","Results"],["team",pendingCount?`Team (${pendingCount})`:"Team"],["progress","Progress"]];
   if(!currentTab) currentTab=tabs[0][0];
   app.innerHTML=`
     <div class="stickytop">
@@ -390,6 +390,7 @@ function renderTab(){
   else if(currentTab==="team") teamScreen(v);
   else if(currentTab==="players") coachPlayers(v);
   else if(currentTab==="library") library(v);
+  else if(currentTab==="technical") technicalScreen(v);
   else if(currentTab==="progress") progress(v);
 }
 
@@ -1155,9 +1156,9 @@ async function buildScreen(v){
         <span class="who" style="margin-left:auto">${drills.length?`${durLabel(totalPractice)} · ${drills.length} drills`:"no drills yet"}</span>
       </div>
       ${drills.length?`
-        <div class="inline" style="gap:8px">
-          <select id="pstart" style="flex:1">${timeOptions(practiceRow?.start_time||"09:00")}</select>
-          <button class="btn btn-primary btn-sm" id="psave">${practiceRow?"Update":"Set"}</button>
+        <div class="inline" style="gap:8px; flex-wrap:nowrap">
+          <select id="pstart" style="flex:1 1 auto; min-width:110px">${timeOptions(practiceRow?.start_time||"09:00")}</select>
+          <button class="btn btn-primary btn-sm" id="psave" style="flex:0 0 auto; white-space:nowrap">${practiceRow?"Update":"Set"}</button>
         </div>
         <p class="who" style="margin:8px 0 0">Practice fills the gaps between your fixed items below.</p>
       `:`<div class="empty" style="padding:14px">Add drills on the Day Plan first — practice time comes from there.</div>`}
@@ -2285,6 +2286,125 @@ async function coachPlayers(v){
   const box=document.getElementById("plist");
   if(!players.length){ box.innerHTML=`<div class="empty">No players linked yet.</div>`; return; }
   box.innerHTML=players.map(p=>`<div class="row-item"><div class="name">${esc(p.name)}</div></div>`).join("");
+}
+
+async function technicalScreen(v){
+  v.innerHTML=`
+    <div class="inline" style="margin-bottom:14px">
+      <h2 style="font-size:18px; margin:0">Technical Blueprint</h2>
+      <span class="who" style="margin-left:auto">Your swing reference</span>
+    </div>
+    
+    <div style="border-radius:10px; overflow:hidden; margin-bottom:14px; border:1px solid #c9a22755">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#c9a227">
+        <span style="font-size:15px; font-weight:800; color:#fff; letter-spacing:.06em">SETUP</span>
+        <span style="font-size:11px; font-weight:700; color:#fff; opacity:.85; background:rgba(0,0,0,.18); padding:2px 9px; border-radius:999px">P1</span>
+      </div>
+      <div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">POSTURE</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Neutral Pelvis - Hinge, Scaps Retracted, Closer to ball</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">BALL POSITION</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Back for Draw + Irons & Up for Fades + Driver</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">TILTS</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Lead Hip High, Trail side lower as clubs get longer</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">ALIGNMENT</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Parallel Left - Use two sticks then drop the top one</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">GRIP</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Strong Lead Hand 45+ & Neutral to Side Trail Hand</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">VSP</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">60 Mid Irons, 48 Driver, 65 Wedges, 75+ Chipping < 30yd</div>
+      </div>
+    </div>
+    <div style="border-radius:10px; overflow:hidden; margin-bottom:14px; border:1px solid #e0342b55">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#e0342b">
+        <span style="font-size:15px; font-weight:800; color:#fff; letter-spacing:.06em">BACKSWING</span>
+        <span style="font-size:11px; font-weight:700; color:#fff; opacity:.85; background:rgba(0,0,0,.18); padding:2px 9px; border-radius:999px">P2-P4</span>
+      </div>
+      <div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">SEQUENCE</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Club, Hands, Pelvis, Torso,</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">GRF</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Counter movement lead side then shift pressure to trail side</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">PIVOT</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">"Centered" Pelvis loaded , Ribcage drives "Turning On Tilt"</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">TRAIL ARM</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Externally rotated elbow infront of shirt seam - Elbow not retracted</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">LEAD ARM</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Lower On Sholuder Plane with irons - Shoulders create pitch vs flat turn</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">PLANE</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Elbow / Shaft Plane</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">COM</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Outside hands in takeaway, pitching above hand path, Depth at Top</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">CLUB FACE / WRIST ANGLES</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Toe up to open with some lead wrist extension at top</div>
+      </div>
+    </div>
+    <div style="border-radius:10px; overflow:hidden; margin-bottom:14px; border:1px solid #2e5aa855">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#2e5aa8">
+        <span style="font-size:15px; font-weight:800; color:#fff; letter-spacing:.06em">DOWNSWING</span>
+        <span style="font-size:11px; font-weight:700; color:#fff; opacity:.85; background:rgba(0,0,0,.18); padding:2px 9px; border-radius:999px">P4-P6</span>
+      </div>
+      <div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">SEQUENCE</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Feet, Pelvis, Torso, Hands, Club - Reverse of Backswing- "Pause Drill"</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">GRF</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">R/L Just enough, AP - Lots of Lead Side "Scuff", Vertical</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">PIVOT</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Horizontal & Frontal balanced - "Harmonizing Movements"</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">TRAIL ARM</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Externally rotated</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">LEAD ARM</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Pronated, Horizontal Adduction - AKA "Lead Arm In"</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">PLANE</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Elbow Plane</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">COM</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Behind Hand Path DRAW - Above / On Hand Path FADE</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">CLUB FACE / WRIST ANGLES</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Lead wrist Flexing - to square face</div>
+      </div>
+    </div>
+    <div style="border-radius:10px; overflow:hidden; margin-bottom:14px; border:1px solid #00a65155">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#00a651">
+        <span style="font-size:15px; font-weight:800; color:#fff; letter-spacing:.06em">DELIVERY</span>
+        <span style="font-size:11px; font-weight:700; color:#fff; opacity:.85; background:rgba(0,0,0,.18); padding:2px 9px; border-radius:999px">P6-P10</span>
+      </div>
+      <div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">COM</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Behind Hand Path - Very Important if AP Higher or will pull it</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">CLUB FACE</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">TM # You Use</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">CLUB PATH</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">TM # You Use</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">SHAFT LEAN / WRIST ANGLES</div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Wedges 13-15 Lean, 6Ir 12 Degrees, Inline Driver</div>
+      </div><div style="display:flex; border-top:1px solid var(--line)">
+        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em"></div>
+        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Spin Loft dependant on Driver Lean with + AOA = SMASH</div>
+      </div>
+    </div>
+    <p class="who" style="text-align:center; margin-top:6px">May 2025</p>`;
 }
 
 /* ============================================================

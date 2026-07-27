@@ -672,9 +672,18 @@ async function weekScreen(v){
     </div>
     <div id="weekbody"><div class="load">Loading the week</div></div>`;
 
-  document.getElementById("wprev").onclick=()=>{ const d=mondayOf(weekStart); d.setDate(d.getDate()-7); weekStart=isoDate(d); weekScreen(v); };
-  document.getElementById("wnext").onclick=()=>{ const d=mondayOf(weekStart); d.setDate(d.getDate()+7); weekStart=isoDate(d); weekScreen(v); };
-  document.getElementById("wthis").onclick=()=>{ weekStart=isoDate(mondayOf(new Date().toISOString().slice(0,10))); weekScreen(v); };
+  const goWeek=(delta)=>{
+    const d=mondayOf(weekStart);
+    d.setDate(d.getDate()+delta);
+    weekStart=isoDate(d);
+    keepScroll(()=>weekScreen(v));
+  };
+  const wp=document.getElementById("wprev");
+  const wn=document.getElementById("wnext");
+  const wt=document.getElementById("wthis");
+  wp.onclick=(e)=>{ e.preventDefault(); goWeek(-7); };
+  wn.onclick=(e)=>{ e.preventDefault(); goWeek(7); };
+  wt.onclick=(e)=>{ e.preventDefault(); weekStart=isoDate(mondayOf(new Date().toISOString().slice(0,10))); keepScroll(()=>weekScreen(v)); };
   if(me.role==="coach"){ document.getElementById("wpick").onchange=e=>{ activePlayerId=e.target.value; weekScreen(v); }; }
 
   // pull the whole week in one query
@@ -821,37 +830,58 @@ function layoutDay(items, drills, dayStart){
 /* The timeline itself */
 function renderTimeline(layout, opts){
   const {blocks, gaps, overlaps} = layout;
-  const span = DAY_END_MIN - DAY_START_MIN;
-  const PX = 620;
-  const y = m => (m - DAY_START_MIN)/span*PX;
+  const START=DAY_START_MIN, END=DAY_END_MIN;
+  const PXPM=0.62;                 // pixels per minute (base scale)
+  const MIN_BLOCK=52;              // a block never shorter than this (fits 2 lines + time)
+  const LABEL_W=46;                // width of the hour gutter
 
+  // Build a merged, time-sorted list of blocks + gaps, then lay them out
+  // sequentially so nothing overlaps. Each item gets at least MIN_BLOCK px;
+  // if its true duration is taller, it keeps that height.
+  const items=[];
+  blocks.forEach(b=>items.push({type:"block", s:b.s, e:b.e, b}));
+  gaps.forEach(g=>items.push({type:"gap", s:g.s, e:g.e}));
+  items.sort((x,y2)=>x.s-y2.s || x.e-y2.e);
+
+  // assign vertical positions: start at the time-proportional spot, but never
+  // above the bottom of the previous item (so back-to-back items stack cleanly)
+  let cursor=0;
+  const positioned=items.map(it=>{
+    const idealTop=(it.s-START)*PXPM;
+    const top=Math.max(idealTop, cursor);
+    const naturalH=(it.e-it.s)*PXPM;
+    const h=Math.max(naturalH, MIN_BLOCK);
+    cursor=top+h+4;                // 4px gap between items
+    return {...it, top, h};
+  });
+  const totalH=Math.max(cursor+10, (END-START)*PXPM);
+
+  // hour lines down the left
   let hours="";
   for(let h=5; h<=22; h++){
-    const top=y(h*60);
-    hours+=`<div style="position:absolute; top:${top}px; left:0; width:42px; font-size:10px; color:var(--faint); transform:translateY(-6px)">${String(h).padStart(2,"0")}:00</div>
-            <div style="position:absolute; top:${top}px; left:46px; right:0; border-top:1px solid var(--line); opacity:.45"></div>`;
+    const top=(h*60-START)*PXPM;
+    hours+=`<div style="position:absolute; top:${top}px; left:0; width:${LABEL_W-4}px; font-size:10px; color:var(--faint); transform:translateY(-6px); text-align:right">${String(h).padStart(2,"0")}:00</div>
+            <div style="position:absolute; top:${top}px; left:${LABEL_W}px; right:0; border-top:1px solid var(--line); opacity:.3"></div>`;
   }
 
-  let gapEls = gaps.map(g=>{
-    const top=y(g.s), h=Math.max(y(g.e)-y(g.s),16);
-    return `<div style="position:absolute; top:${top}px; height:${h}px; left:52px; right:2px; border:1px dashed var(--line); border-radius:6px; display:flex; align-items:center; justify-content:center">
-      <span style="font-size:10px; color:var(--faint); letter-spacing:.05em">FREE · ${durLabel(g.e-g.s)}</span></div>`;
-  }).join("");
-
-  let blockEls = blocks.map((b,i)=>{
-    const st=KIND_STYLE[b.kind]||KIND_STYLE.other;
-    const top=y(b.s), h=Math.max(y(b.e)-y(b.s),26);
-    const tall = h>62;
+  const els=positioned.map(it=>{
+    if(it.type==="gap"){
+      return `<div style="position:absolute; top:${it.top}px; height:${it.h}px; left:${LABEL_W+6}px; right:2px;
+          border:1px dashed var(--line); border-radius:6px; display:flex; align-items:center; justify-content:center">
+        <span style="font-size:10px; color:var(--faint); letter-spacing:.05em">FREE · ${durLabel(it.e-it.s)}</span></div>`;
+    }
+    const b=it.b, st=KIND_STYLE[b.kind]||KIND_STYLE.other;
+    const roomy = it.h>78;         // enough space to list drills
     const clickable = opts.linkPractice && b.kind==="practice";
-    return `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${top}px; height:${h}px; left:52px; right:2px;
-        background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:7px; padding:6px 10px; overflow:hidden; ${clickable?"cursor:pointer":""}">
+    return `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${it.top}px; min-height:${it.h}px; left:${LABEL_W+6}px; right:2px;
+        background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:7px; padding:7px 10px; overflow:hidden; ${clickable?"cursor:pointer":""}">
       <div style="display:flex; justify-content:space-between; gap:8px; align-items:baseline">
         <span style="font-size:13px; font-weight:700; color:var(--ink)">${esc(b.label||st.label)}${b.is_private?' <span style="font-size:9px;color:var(--faint)">PRIVATE</span>':''}</span>
         <span style="font-size:11px; color:${st.ac}; font-weight:700; white-space:nowrap">${m2t(b.s)}–${m2t(b.e)}</span>
       </div>
-      <div style="font-size:10px; color:var(--muted)">${esc(b.note||"")}</div>
-      ${tall&&b.drills?`<div style="font-size:11px; color:var(--muted); margin-top:5px; line-height:1.55">${b.drills.map(d=>esc(d.name)+" · "+(d.minutes||0)+"m").join("<br>")}</div>`:""}
-      ${clickable&&tall?`<div style="font-size:10px; color:${st.ac}; margin-top:5px">Open on the sheet →</div>`:""}
+      ${b.note?`<div style="font-size:10px; color:var(--muted); margin-top:1px">${esc(b.note)}</div>`:""}
+      ${roomy&&b.drills?`<div style="font-size:11px; color:var(--muted); margin-top:5px; line-height:1.5">${b.drills.map(d=>esc(d.name)+" · "+(d.minutes||0)+"m").join("<br>")}</div>`:""}
+      ${clickable&&roomy?`<div style="font-size:10px; color:${st.ac}; margin-top:5px">Open on the sheet →</div>`:""}
     </div>`;
   }).join("");
 
@@ -867,7 +897,7 @@ function renderTimeline(layout, opts){
   </div>`;
 
   return warn+unplaced+legend+
-    `<div class="gridwrap" style="padding:10px 8px 10px 4px"><div style="position:relative; height:${PX}px">${hours}${gapEls}${blockEls}</div></div>`;
+    `<div class="gridwrap" style="padding:10px 8px 10px 4px"><div style="position:relative; height:${totalH}px">${hours}${els}</div></div>`;
 }
 
 /* ============================================================
@@ -1033,13 +1063,15 @@ async function scheduleWeek(v){
 async function buildScreen(v){
   if(me.role!=="player"){ v.innerHTML=`<div class="empty">Only you can build the schedule.</div>`; return; }
 
-  const [{data:items},{data:sess}] = await Promise.all([
+  const [{data:items},{data:sess},{data:templates}] = await Promise.all([
     sb.from("schedule_items").select("*").eq("player_id",me.id).eq("day",schedDay).order("start_time"),
-    sb.from("sessions").select("minutes, sort, drills(name)").eq("player_id",me.id).eq("logged_on",schedDay).order("sort")
+    sb.from("sessions").select("minutes, sort, drills(name)").eq("player_id",me.id).eq("logged_on",schedDay).order("sort"),
+    sb.from("day_templates").select("*").eq("player_id",me.id).order("sort")
   ]);
   const drills=(sess||[]).filter(x=>x.drills).map(x=>({name:x.drills.name,minutes:+x.minutes||0}));
   const totalPractice=drills.reduce((a,d)=>a+d.minutes,0);
   const practiceRow=(items||[]).find(i=>i.kind==="practice");
+  const anchors=(items||[]).filter(i=>i.kind!=="practice");
 
   v.innerHTML=`
     <div class="daybar">
@@ -1047,9 +1079,20 @@ async function buildScreen(v){
       <div class="dsel"><span class="who">Day</span><input type="date" id="bday" value="${schedDay}"></div>
       <button class="btn btn-ghost btn-sm" id="bnext">›</button>
       <button class="btn btn-ghost btn-sm" id="btoday">Today</button>
-      <span class="who" style="margin-left:auto">Set fixed items — practice fills the gaps</span>
     </div>
 
+    <!-- TEMPLATES -->
+    <div class="card">
+      <div class="inline" style="margin-bottom:10px">
+        <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin:0">Templates</h3>
+        <span class="who" style="margin-left:auto">Start from a saved day shape</span>
+      </div>
+      ${(templates||[]).length? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px">
+        ${templates.map(t=>`<button class="btn btn-ghost btn-sm tmpl" data-id="${t.id}">${esc(t.name)}</button>`).join("")}
+      </div>` : `<p class="who" style="margin:0 0 6px">No templates yet. Build a day below, then save it as one.</p>`}
+    </div>
+
+    <!-- PRACTICE START -->
     <div class="card">
       <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:10px">Practice</h3>
       ${drills.length?`
@@ -1061,32 +1104,19 @@ async function buildScreen(v){
       `:`<div class="empty" style="padding:16px">No drills on the Day Plan for this date. Add them there first and practice will appear here.</div>`}
     </div>
 
-    <div class="card">
-      <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:10px">Fixed commitment</h3>
-      <div class="grid3">
-        <div><label class="mini">Type</label><select id="ikind">
-          <option value="media">Media</option><option value="travel">Travel</option>
-          <option value="gym">Gym</option><option value="other">Other</option></select></div>
-        <div><label class="mini">Start</label><select id="itime">${timeOptions("13:00")}</select></div>
-        <div><label class="mini">Length</label><select id="imins">
-          ${[15,30,45,60,90,120,180,240,300].map(m=>`<option value="${m}" ${m===45?"selected":""}>${durLabel(m)}</option>`).join("")}
-        </select></div>
-      </div>
-      <div class="field" style="margin-top:8px"><label class="mini">Label</label><input id="ilabel" placeholder="e.g. Sky Sports / Flight to Dublin / Lunch"></div>
-      <div class="inline" style="margin-top:10px">
-        <label class="inline" style="font-size:13px; color:var(--muted)"><input type="checkbox" id="ipriv" style="width:auto"> Private</label>
-        <button class="btn btn-primary btn-sm" id="iadd" style="margin-left:auto">Add to day</button>
-      </div>
-    </div>
+    <!-- THE DAY, WITH INLINE VERTICAL ADD -->
+    <div class="sec-h"><h2>The day</h2></div>
+    <div class="card" id="blist"></div>
 
-    <div class="sec-h"><h2>On this day</h2></div>
-    <div class="card" id="blist"></div>`;
+    <!-- SAVE AS TEMPLATE -->
+    ${(items||[]).length?`
+    <button class="btn btn-ghost btn-sm" id="savetmpl" style="width:100%; margin-top:4px">Save this day as a template</button>`:""}`;
 
-  const shift=n=>{ const d=new Date(schedDay+"T00:00:00"); d.setDate(d.getDate()+n); schedDay=d.toISOString().slice(0,10); buildScreen(v); };
+  const shift=n=>{ const d=new Date(schedDay+"T00:00:00"); d.setDate(d.getDate()+n); schedDay=d.toISOString().slice(0,10); keepScroll(()=>buildScreen(v)); };
   document.getElementById("bprev").onclick=()=>shift(-1);
   document.getElementById("bnext").onclick=()=>shift(1);
-  document.getElementById("btoday").onclick=()=>{ schedDay=new Date().toISOString().slice(0,10); buildScreen(v); };
-  document.getElementById("bday").onchange=e=>{ schedDay=e.target.value; buildScreen(v); };
+  document.getElementById("btoday").onclick=()=>{ schedDay=new Date().toISOString().slice(0,10); keepScroll(()=>buildScreen(v)); };
+  document.getElementById("bday").onchange=e=>{ schedDay=e.target.value; keepScroll(()=>buildScreen(v)); };
 
   const ps=document.getElementById("psave");
   if(ps) ps.onclick=async()=>{
@@ -1095,39 +1125,94 @@ async function buildScreen(v){
       ? await sb.from("schedule_items").update({start_time:t}).eq("id",practiceRow.id)
       : await sb.from("schedule_items").insert({player_id:me.id, day:schedDay, start_time:t, kind:"practice", label:"Practice", is_anchor:false});
     if(res.error){ flash(res.error.message); return; }
-    flash("Practice set"); buildScreen(v);
+    flash("Practice set"); keepScroll(()=>buildScreen(v));
   };
 
-  document.getElementById("iadd").onclick=async()=>{
-    const kind=val("ikind"), st=t2m(val("itime")), len=+val("imins")||0;
-    const clash=(items||[]).filter(i=>i.kind!=="practice"&&i.start_time)
-      .find(i=>{ const s2=t2m(i.start_time), e2=s2+(i.duration_mins||0); return st < e2 && (st+len) > s2; });
-    if(clash && !confirm(`This overlaps "${clash.label||clash.kind}" at ${clash.start_time}. Add it anyway?`)) return;
-    const {error}=await sb.from("schedule_items").insert({
-      player_id:me.id, day:schedDay, start_time:val("itime"), duration_mins:len,
-      kind, label:val("ilabel")||null, is_private:document.getElementById("ipriv").checked, is_anchor:true });
-    if(error){ flash(error.message); return; }
-    flash("Added"); buildScreen(v);
-  };
-
-  const box=document.getElementById("blist");
-  if(!items?.length){ box.innerHTML=`<div class="empty" style="border:0">Nothing on this day yet.</div>`; return; }
-  box.innerHTML=items.map(it=>{
-    const st=KIND_STYLE[it.kind]||KIND_STYLE.other;
-    const mins = it.kind==="practice" ? totalPractice : (it.duration_mins||0);
-    return `<div class="row-item">
-      <span class="pill" style="background:${st.bg}; color:${st.ac}">${st.label}</span>
-      <div class="name">${esc(it.label||st.label)}
-        <small>${it.start_time||"—"}${mins?" – "+m2t(t2m(it.start_time)+mins):""} · ${durLabel(mins)}${it.is_private?" · private":""}</small></div>
-      <button class="rowdel" data-id="${it.id}" title="Remove" style="font-size:20px; padding:0 8px">×</button>
-    </div>`;
-  }).join("");
-  box.querySelectorAll(".rowdel").forEach(b=>b.onclick=async()=>{
-    if(!confirm("Remove this from the day?")) return;
-    const {error}=await sb.from("schedule_items").delete().eq("id",b.dataset.id);
-    if(error){ flash(error.message); return; }
-    flash("Removed"); buildScreen(v);
+  // apply a template to this day
+  v.querySelectorAll(".tmpl").forEach(b=>b.onclick=async()=>{
+    const t=(templates||[]).find(x=>x.id===b.dataset.id); if(!t) return;
+    if(!confirm(`Apply "${t.name}" to ${schedDay}? This adds its items to the day.`)) return;
+    const rows=(t.items||[]).map(it=>({
+      player_id:me.id, day:schedDay, kind:it.kind, label:it.label||null,
+      start_time:it.start_time||null, duration_mins:it.duration_mins||0,
+      is_private:!!it.is_private, is_anchor:it.kind!=="practice"
+    }));
+    if(t.practice_start && !rows.some(r=>r.kind==="practice"))
+      rows.push({player_id:me.id, day:schedDay, kind:"practice", label:"Practice", start_time:t.practice_start, is_anchor:false});
+    if(rows.length){
+      const {error}=await sb.from("schedule_items").insert(rows);
+      if(error){ flash(error.message); return; }
+    }
+    flash(`Applied ${t.name}`); keepScroll(()=>buildScreen(v));
   });
+
+  // save current day as a template
+  const st=document.getElementById("savetmpl");
+  if(st) st.onclick=async()=>{
+    const name=prompt("Name this template (e.g. Tournament day, Range day):");
+    if(!name) return;
+    const tItems=anchors.map(i=>({kind:i.kind, label:i.label, start_time:i.start_time, duration_mins:i.duration_mins, is_private:i.is_private}));
+    const {error}=await sb.from("day_templates").insert({
+      player_id:me.id, name, practice_start:practiceRow?.start_time||null, items:tItems,
+      sort:(templates||[]).length });
+    if(error){ flash(error.message); return; }
+    flash(`Saved "${name}"`); keepScroll(()=>buildScreen(v));
+  };
+
+  renderBuildList();
+
+  function renderBuildList(){
+    const box=document.getElementById("blist");
+    // the always-present inline add row at the top
+    const addRow = `
+      <div style="display:flex; gap:6px; align-items:center; padding:9px; background:var(--panel-2);
+           border:1px dashed var(--blood-2); border-radius:8px; margin-bottom:10px; flex-wrap:wrap">
+        <select id="a-kind" style="flex:1; min-width:90px">
+          <option value="media">Media</option><option value="travel">Travel</option>
+          <option value="gym">Gym</option><option value="other">Other</option></select>
+        <select id="a-time" style="flex:1; min-width:80px">${timeOptions("13:00")}</select>
+        <select id="a-mins" style="flex:1; min-width:70px">
+          ${[15,30,45,60,90,120,180,240].map(m=>`<option value="${m}" ${m===45?"selected":""}>${durLabel(m)}</option>`).join("")}
+        </select>
+        <input id="a-label" placeholder="Label (optional)" style="flex:2; min-width:120px">
+        <label class="inline" style="font-size:12px; color:var(--muted); flex:0 0 auto"><input type="checkbox" id="a-priv" style="width:auto"> Private</label>
+        <button class="btn btn-primary btn-sm" id="a-add" style="flex:0 0 auto">Add</button>
+      </div>`;
+
+    const list = !(items||[]).length
+      ? `<div class="empty" style="border:0">Nothing on this day yet — add above, or apply a template.</div>`
+      : items.map(it=>{
+          const st=KIND_STYLE[it.kind]||KIND_STYLE.other;
+          const mins = it.kind==="practice" ? totalPractice : (it.duration_mins||0);
+          return `<div class="row-item">
+            <span class="pill" style="background:${st.bg}; color:${st.ac}">${st.label}</span>
+            <div class="name">${esc(it.label||st.label)}
+              <small>${it.start_time||"—"}${mins?" – "+m2t(t2m(it.start_time)+mins):""} · ${durLabel(mins)}${it.is_private?" · private":""}</small></div>
+            <button class="rowdel" data-id="${it.id}" title="Remove" style="font-size:20px; padding:0 8px">×</button>
+          </div>`;
+        }).join("");
+
+    box.innerHTML = addRow + list;
+
+    document.getElementById("a-add").onclick=async()=>{
+      const kind=val("a-kind"), st2=t2m(val("a-time")), len=+val("a-mins")||0;
+      const clash=anchors.filter(i=>i.start_time)
+        .find(i=>{ const s2=t2m(i.start_time), e2=s2+(i.duration_mins||0); return st2 < e2 && (st2+len) > s2; });
+      if(clash && !confirm(`This overlaps "${clash.label||clash.kind}" at ${clash.start_time}. Add it anyway?`)) return;
+      const {error}=await sb.from("schedule_items").insert({
+        player_id:me.id, day:schedDay, start_time:val("a-time"), duration_mins:len,
+        kind, label:val("a-label")||null, is_private:document.getElementById("a-priv").checked, is_anchor:true });
+      if(error){ flash(error.message); return; }
+      flash("Added"); keepScroll(()=>buildScreen(v));
+    };
+
+    box.querySelectorAll(".rowdel").forEach(b=>b.onclick=async()=>{
+      if(!confirm("Remove this from the day?")) return;
+      const {error}=await sb.from("schedule_items").delete().eq("id",b.dataset.id);
+      if(error){ flash(error.message); return; }
+      flash("Removed"); keepScroll(()=>buildScreen(v));
+    });
+  }
 }
 
 /* ============================================================

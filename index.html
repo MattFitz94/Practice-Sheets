@@ -35,7 +35,7 @@
   header{
     background:linear-gradient(180deg,#1b2027 0%,var(--bg) 100%);
     border-bottom:1px solid var(--line);
-    position:sticky; top:0; z-index:30;
+    position:relative; z-index:2;
     padding-top:env(safe-area-inset-top);
   }
   header .wrap{display:flex; align-items:center; gap:12px; padding-top:12px; padding-bottom:12px}
@@ -70,7 +70,8 @@
   .err{background:#2e1f1a; border:1px solid #7a4a33; color:#f0c2ab; padding:10px 12px; border-radius:var(--r); font-size:13px; margin-bottom:12px}
 
   /* tabs */
-  nav.tabs{display:flex; gap:4px; padding:14px 0 6px; position:sticky; top:56px; background:var(--bg); z-index:20; border-bottom:1px solid var(--line)}
+  .stickytop{position:sticky; top:0; z-index:30; background:var(--bg)}
+  nav.tabs{display:flex; gap:4px; padding:10px 0 6px; background:var(--bg); z-index:20; border-bottom:1px solid var(--line)}
   nav.tabs button{background:none; border:0; padding:9px 14px; font-size:12px; color:var(--muted); border-radius:8px; font-weight:700; text-transform:uppercase; letter-spacing:.05em}
   nav.tabs button.on{background:var(--blood-2); color:var(--lime-ink)}
 
@@ -218,6 +219,26 @@ function todayISO(){
 }
 let activeDay = todayISO();
 let drillMap = {};          // id -> drill
+// A row is still a "plan" if its day is in the future (or today) and it isn't
+// marked done. Planned rows display the drill's CURRENT default for time/balls,
+// so editing the drill updates every planned day at once. Logged/past rows keep
+// exactly what was recorded.
+function isPlannedRow(row, dayISO){
+  const done = row.status==="done" || row.completed===true;
+  const past = dayISO < todayISO();
+  return !done && !past;
+}
+// The value to SHOW for a planned row: drill default if the row's own value is
+// empty OR the row is a plan; otherwise the row's logged value.
+function shownVal(row, dayISO, field, drillField){
+  const d = row.drill_id ? drillMap[row.drill_id] : null;
+  const planned = isPlannedRow(row, dayISO);
+  const own = row[field];
+  const blank = own==null || own==="" ;
+  if(d && (planned || blank) && d[drillField]!=null) return d[drillField];
+  return blank ? "" : own;
+}
+
 async function refreshDrills(){
   const {data}=await sb.from("drills").select("*");
   drillMap={}; (data||[]).forEach(d=>drillMap[d.id]=d);
@@ -331,16 +352,18 @@ function shell(){
     : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build Day"],["library","Drills"],["season","Season"],["results","Results"],["team",pendingCount?`Team (${pendingCount})`:"Team"],["progress","Progress"]];
   if(!currentTab) currentTab=tabs[0][0];
   app.innerHTML=`
-    <header><div class="wrap">
-      <div class="mark"><div class="bar"></div><div class="brand">Practice <em>Schedule</em></div></div>
-      <div class="whoami">
-        <span class="rolechip">${me.role}</span>
-        <span>${esc(me.full_name||"")}</span>
-        <button class="signout" id="signout">Sign out</button>
-      </div>
-    </div></header>
+    <div class="stickytop">
+      <header><div class="wrap">
+        <div class="mark"><div class="bar"></div><div class="brand">Practice <em>Schedule</em></div></div>
+        <div class="whoami">
+          <span class="rolechip">${me.role}</span>
+          <span>${esc(me.full_name||"")}</span>
+          <button class="signout" id="signout">Sign out</button>
+        </div>
+      </div></header>
+      <div class="wrap"><nav class="tabs">${tabs.map(t=>`<button data-tab="${t[0]}" class="${t[0]===currentTab?'on':''}">${t[1]}</button>`).join("")}</nav></div>
+    </div>
     <div class="wrap">
-      <nav class="tabs">${tabs.map(t=>`<button data-tab="${t[0]}" class="${t[0]===currentTab?'on':''}">${t[1]}</button>`).join("")}</nav>
       <div id="tabview"></div>
     </div>`;
   document.getElementById("signout").onclick=()=>sb.auth.signOut();
@@ -511,8 +534,8 @@ function drawRows(drills){
       <td>${isViewer?`<span style="font-size:14px">${d?esc(d.name):"—"}</span>`:`<select class="drillsel" data-i="${i}">${opts}</select>`}</td>
       <td><span class="auto">${d&&d.default_club?esc(d.default_club):'—'}</span></td>
       <td style="text-align:center">${catCell}</td>
-      <td style="text-align:center">${isViewer?`<span class="auto">${r.minutes===""?"—":esc(r.minutes)}</span>`:`<input class="cell-in" data-i="${i}" data-f="minutes" value="${esc(r.minutes)}">`}</td>
-      <td style="text-align:center">${isViewer?`<span class="auto">${r.balls===""?"—":esc(r.balls)}</span>`:`<input class="cell-in" data-i="${i}" data-f="balls" value="${esc(r.balls)}">`}</td>
+      <td style="text-align:center">${isViewer?`<span class="auto">${shownVal(r,activeDay,"minutes","default_minutes")===""?"—":esc(shownVal(r,activeDay,"minutes","default_minutes"))}</span>`:`<input class="cell-in" data-i="${i}" data-f="minutes" value="${esc(shownVal(r,activeDay,"minutes","default_minutes"))}">`}</td>
+      <td style="text-align:center">${isViewer?`<span class="auto">${shownVal(r,activeDay,"balls","default_balls")===""?"—":esc(shownVal(r,activeDay,"balls","default_balls"))}</span>`:`<input class="cell-in" data-i="${i}" data-f="balls" value="${esc(shownVal(r,activeDay,"balls","default_balls"))}">`}</td>
       <td><span class="auto">${d&&d.distance?esc(d.distance):(r.distance?esc(r.distance):'—')}</span></td>
       <td style="text-align:center">${isViewer?`<span class="auto">${r.mental===""?"—":esc(r.mental)}</span>`:`<input class="cell-in" data-i="${i}" data-f="mental" value="${esc(r.mental)}">`}</td>
       <td style="text-align:center">${isViewer?`<span class="auto">${r.physical===""?"—":esc(r.physical)}</span>`:`<input class="cell-in" data-i="${i}" data-f="physical" value="${esc(r.physical)}">`}</td>
@@ -599,7 +622,12 @@ async function openComments(i){
 
 function totals(){
   let tt=0,tb=0,tm=0,mc=0,tp=0;
-  gridRows.forEach(r=>{ tt+=+r.minutes||0; tb+=+r.balls||0; if(r.mental!==""&&r.mental!=null){tm+=+r.mental;mc++;} tp+=+r.physical||0; });
+  gridRows.forEach(r=>{
+    const mn=shownVal(r,activeDay,"minutes","default_minutes");
+    const bl=shownVal(r,activeDay,"balls","default_balls");
+    tt+=+mn||0; tb+=+bl||0;
+    if(r.mental!==""&&r.mental!=null){tm+=+r.mental;mc++;} tp+=+r.physical||0;
+  });
   const set=(id,v)=>{const el=document.getElementById(id); if(el)el.textContent=v;};
   set("t-time",Math.round(tt)); set("t-balls",Math.round(tb));
   set("t-ment",mc?tm.toFixed(1):"0"); set("t-phys",tp.toFixed(1));
@@ -699,18 +727,25 @@ async function weekScreen(v){
   if(me.role==="coach"){ document.getElementById("wpick").onchange=e=>{ activePlayerId=e.target.value; weekScreen(v); }; }
 
   // pull the whole week in one query
-  const {data:sess}=await sb.from("sessions").select("*, drills(name,category)")
+  const {data:sess}=await sb.from("sessions").select("*, drills(name,category,default_minutes,default_balls)")
     .eq("player_id",pid).gte("logged_on",from).lte("logged_on",to).order("sort");
   const rowsByDay={}; days.forEach(d=>rowsByDay[isoDate(d)]=[]);
   (sess||[]).forEach(s=>{ (rowsByDay[s.logged_on]=rowsByDay[s.logged_on]||[]).push(s); });
+  // resolve the value to show: planned days follow the drill default, logged days keep theirs
+  const wkVal=(s,field,defField)=>{
+    const planned = !(s.status==="done"||s.completed===true) && s.logged_on>=todayISO();
+    const own=s[field]; const blank=own==null||own==="";
+    if(s.drills && (planned||blank) && s.drills[defField]!=null) return +s.drills[defField];
+    return blank?0:(+own||0);
+  };
 
   // ----- horizontal week board: one column per day -----
   const catP=c=>`<span class="pill ${pillClass(c)}" style="font-size:9px; padding:2px 6px">${esc(c||'')}</span>`;
   let cols="";
   days.forEach(d=>{
     const key=isoDate(d), list=rowsByDay[key]||[];
-    const mins=list.reduce((a,s)=>a+(+s.minutes||0),0);
-    const balls=list.reduce((a,s)=>a+(s.balls||0),0);
+    const mins=list.reduce((a,s)=>a+wkVal(s,"minutes","default_minutes"),0);
+    const balls=list.reduce((a,s)=>a+wkVal(s,"balls","default_balls"),0);
     const done=list.filter(s=>(s.status||(s.completed?"done":"pending"))==="done").length;
     const missed=list.filter(s=>(s.status||"pending")==="missed").length;
     const isToday = key===todayISO();
@@ -728,7 +763,7 @@ async function weekScreen(v){
                 <span class="statusflag s-${s.status||(s.completed?'done':'pending')}" style="font-size:12px">${(s.status||(s.completed?'done':'pending'))==='done'?'✓':(s.status==='missed'?'✗':'·')}</span>
               </div>
               <div style="font-size:12px; margin-top:3px; line-height:1.25">${esc(s.drills?.name||'—')}</div>
-              <div style="font-size:10px; color:var(--muted); margin-top:2px">${s.minutes||0}m · ${s.balls||0}b</div>
+              <div style="font-size:10px; color:var(--muted); margin-top:2px">${wkVal(s,"minutes","default_minutes")}m · ${wkVal(s,"balls","default_balls")}b</div>
             </div>`).join("")
             : `<div style="color:var(--faint); font-size:11px; text-align:center; padding:14px 4px">—</div>` }
         </div>

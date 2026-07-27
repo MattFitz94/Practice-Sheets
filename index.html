@@ -461,6 +461,7 @@ async function dayScreen(v){
     </div>
     <div class="gridtools">
       ${me.role==="viewer"?"":`<button class="btn btn-ghost btn-sm" id="addrow">+ Add row</button>`}
+      ${me.role==="viewer"?"":`<button class="btn btn-sm" id="clearday" style="background:#e0574f; color:#fff; border:0">Clear day</button>`}
       <div class="savebar" style="margin-left:auto">
         <span class="savestate" id="savestate"></span>
         ${me.role==="viewer"?`<span class="who">Read only</span>`:`<button class="btn btn-primary btn-sm" id="savegrid">Save the day</button>`}
@@ -477,6 +478,36 @@ async function dayScreen(v){
   document.getElementById("dtoday").onclick=()=>{ activeDay=todayISO(); keepScroll(()=>dayScreen(v)); };
   const arow=document.getElementById("addrow"); if(arow) arow.onclick=()=>{ gridRows.push(blankRow()); drawRows(drills); };
   const sgrid=document.getElementById("savegrid"); if(sgrid) sgrid.onclick=saveDay;
+  const cday=document.getElementById("clearday");
+  if(cday) cday.onclick=()=>{
+    const pid = me.role==="player" ? me.id : activePlayerId;
+    if(!pid){ flash("No player selected"); return; }
+    const wrap=document.createElement("div"); wrap.className="cmodal";
+    const nice=new Date(activeDay+"T00:00:00").toLocaleDateString(undefined,{weekday:"long", day:"numeric", month:"long"});
+    wrap.innerHTML=`<div class="cbox">
+      <div class="chead"><div><b>Clear this day?</b><div class="who">${nice}</div></div>
+        <button class="cx" id="cdx">×</button></div>
+      <div class="clist" style="padding:16px">
+        <p style="font-size:14px; color:var(--ink); margin:0 0 8px">This removes <b>every drill on the Day Plan</b> for ${nice}.</p>
+        <p style="font-size:13px; color:var(--muted); margin:0">It only clears the practice sheet for this one day. Your schedule, results, other days, and drill library are untouched. This can't be undone.</p>
+      </div>
+      <div class="cfoot">
+        <button class="btn btn-ghost btn-sm" id="cd-cancel">Cancel</button>
+        <button class="btn btn-sm" id="cd-go" style="margin-left:auto; background:#e0574f; color:#fff; border:0">Yes, clear the day</button>
+      </div></div>`;
+    document.body.appendChild(wrap);
+    const close=()=>wrap.remove();
+    wrap.onclick=e=>{ if(e.target===wrap) close(); };
+    document.getElementById("cdx").onclick=close;
+    document.getElementById("cd-cancel").onclick=close;
+    document.getElementById("cd-go").onclick=async()=>{
+      // delete ONLY this player's practice sessions for this one day
+      const {error}=await sb.from("sessions").delete()
+        .eq("player_id",pid).eq("logged_on",activeDay);
+      if(error){ flash(error.message); return; }
+      flash("Day cleared"); close(); keepScroll(()=>dayScreen(v));
+    };
+  };
 
   await loadDay();
   drawRows(drills);

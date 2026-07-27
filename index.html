@@ -1156,10 +1156,8 @@ async function buildScreen(v){
         <span class="who" style="margin-left:auto">${drills.length?`${durLabel(totalPractice)} · ${drills.length} drills`:"no drills yet"}</span>
       </div>
       ${drills.length?`
-        <div class="inline" style="gap:8px; flex-wrap:nowrap">
-          <select id="pstart" style="flex:1 1 auto; min-width:110px">${timeOptions(practiceRow?.start_time||"09:00")}</select>
-          <button class="btn btn-primary btn-sm" id="psave" style="flex:0 0 auto; white-space:nowrap">${practiceRow?"Update":"Set"}</button>
-        </div>
+        <select id="pstart" style="width:100%; box-sizing:border-box; display:block">${timeOptions(practiceRow?.start_time||"09:00")}</select>
+        <button class="btn btn-primary btn-sm" id="psave" style="width:100%; box-sizing:border-box; display:block; margin-top:8px">${practiceRow?"Update practice start":"Set practice start"}</button>
         <p class="who" style="margin:8px 0 0">Practice fills the gaps between your fixed items below.</p>
       `:`<div class="empty" style="padding:14px">Add drills on the Day Plan first — practice time comes from there.</div>`}
     </div>

@@ -2307,25 +2307,28 @@ async function library(v){
     wrap.onclick=e=>{ if(e.target===wrap) close(); };
     document.getElementById("edx").onclick=close;
     document.getElementById("e-save").onclick=async()=>{
-      const { data:updated, error }=await sb.from("drills").update({
-        name:val("e-n"), category:val("e-c"), default_club:val("e-k"),
+      const newName=val("e-n");
+      const { error }=await sb.from("drills").update({
+        name:newName, category:val("e-c"), default_club:val("e-k"),
         default_minutes:num(val("e-t")), default_balls:num(val("e-b")), distance:val("e-d"),
         default_mental:num(val("e-m")), default_physical:num(val("e-p")), why:val("e-w"), goal:val("e-g")
-      }).eq("id",d.id).select();
+      }).eq("id",d.id);
       if(error){ flash(error.message); return; }
-      if(!updated || !updated.length){
-        flash("Couldn't save — this drill isn't owned by your account. Run claim_drills.sql once in Supabase.");
+      // verify by re-reading the row (a returned .select() can be empty even on success)
+      const { data:check }=await sb.from("drills").select("name").eq("id",d.id).maybeSingle();
+      if(check && check.name!==newName){
+        flash("Save didn't take — this drill may belong to another account.");
         return;
       }
-      // refresh the shared drill cache so Day Plan reflects the change immediately
       const {data:drills}=await sb.from("drills").select("*"); drillMap={}; (drills||[]).forEach(x=>drillMap[x.id]=x);
       flash("Drill updated"); close(); loadLib();
     };
     document.getElementById("e-del").onclick=async()=>{
       if(!confirm(`Delete "${d.name}"? This can't be undone. Sessions already logged with it are kept.`)) return;
-      const { data:del, error }=await sb.from("drills").delete().eq("id",d.id).select();
+      const { error }=await sb.from("drills").delete().eq("id",d.id);
       if(error){ flash(error.message.includes("foreign")?"That drill is used in logged sessions — can't delete it.":error.message); return; }
-      if(!del || !del.length){ flash("Couldn't delete — this drill isn't owned by your account. Run claim_drills.sql once in Supabase."); return; }
+      const { data:check }=await sb.from("drills").select("id").eq("id",d.id).maybeSingle();
+      if(check){ flash("Delete didn't take — this drill may belong to another account."); return; }
       const {data:drills}=await sb.from("drills").select("*"); drillMap={}; (drills||[]).forEach(x=>drillMap[x.id]=x);
       flash("Drill deleted"); close(); loadLib();
     };

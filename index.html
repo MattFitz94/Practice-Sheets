@@ -1016,6 +1016,13 @@ function renderTimeline(layout, opts){
      start/finish line up with the hour gutter. Same look as the list below:
      name top-left, time under it, category on the right. */
   const FOOT_H = 21;                         // summary strip along the bottom of the bubble
+  const footStrip = (b, st, clickable) => `<div style="position:absolute; left:6px; right:2px; bottom:2px; height:${FOOT_H}px; box-sizing:border-box; z-index:2;
+      display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 10px;
+      background:rgba(0,0,0,.42); border-top:1px solid rgba(255,255,255,.07); border-radius:0 0 6px 6px;
+      font-size:10.5px; letter-spacing:.03em">
+    <span style="color:var(--muted); white-space:nowrap">${b.drills.length} drill${b.drills.length>1?"s":""} · <b style="color:var(--ink); font-weight:700">${durLabel(b.e-b.s)}</b></span>
+    <span style="color:${st.ac}; font-weight:700; white-space:nowrap">${m2t(b.s)}–${m2t(b.e)}${clickable?" ›":""}</span>
+  </div>`;
   const MIN_ROW = 54;                        // a row never gets smaller than its own text
   // rough line count for the drill name — the pill takes the right half, so ~24 chars fit
   const rowNeed = name => 37 + 17*Math.min(3, Math.max(1, Math.ceil((name||"").length/24)));
@@ -1045,10 +1052,13 @@ function renderTimeline(layout, opts){
     return {html, used:cursor};
   };
 
-  const blockEls = blocks.map(b=>{
+  const blockEls = blocks.map((b,bi)=>{
     const st=KIND_STYLE[b.kind]||KIND_STYLE.other;
     const top=y(b.s), realH=y(b.e)-y(b.s);
     const h=Math.max(realH,20);
+    // a bubble may grow for its rows, but never past whatever comes next
+    const nextTop = bi+1<blocks.length ? y(blocks[bi+1].s) : totalH;
+    const ceiling = Math.max(nextTop-top-4, h);
     const hasDrills = !!(b.drills && b.drills.length);
     const clickable = opts.linkPractice && b.kind==="practice";
     const shell = (inner, pad, height) => `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${top}px; height:${height||h}px; left:${LABEL_W+6}px; right:2px;
@@ -1057,17 +1067,16 @@ function renderTimeline(layout, opts){
     if(b.kind==="practice" && hasDrills){
       const rows = drillRows(b,st);
       const foot = realH>=90;                // only when the bubble can spare the strip
-      // grow the bubble if the rows needed more room than the block's duration gives
-      const bh = Math.max(h, rows.used + (foot?FOOT_H:0) + 6);
+      // grow the bubble if the rows need more room, but stop short of the next block
+      const want = rows.used + (foot?FOOT_H:0) + 6;
+      const bh = Math.min(Math.max(h, want), ceiling);
+      if(want>bh) return shell(`
+        <div style="position:absolute; top:2px; left:6px; right:2px; bottom:${foot?FOOT_H+2:2}px; overflow-y:auto; -webkit-overflow-scrolling:touch">
+          <div style="position:relative; height:${rows.used}px">${rows.html}</div></div>
+        ${foot?footStrip(b,st,clickable):""}`, "0", bh);
       return shell(`
         <div style="position:absolute; top:2px; left:6px; right:2px; bottom:2px">${rows.html}</div>
-        ${foot?`<div style="position:absolute; left:6px; right:2px; bottom:2px; height:${FOOT_H}px; box-sizing:border-box; z-index:2;
-            display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 10px;
-            background:rgba(0,0,0,.42); border-top:1px solid rgba(255,255,255,.07); border-radius:0 0 6px 6px;
-            font-size:10.5px; letter-spacing:.03em">
-          <span style="color:var(--muted); white-space:nowrap">${b.drills.length} drill${b.drills.length>1?"s":""} · <b style="color:var(--ink); font-weight:700">${durLabel(b.e-b.s)}</b></span>
-          <span style="color:${st.ac}; font-weight:700; white-space:nowrap">${m2t(b.s)}–${m2t(b.e)}${clickable?" ›":""}</span>
-        </div>`:""}`, "0", bh);
+        ${foot?footStrip(b,st,clickable):""}`, "0", bh);
     }
 
     const roomForNote = realH>40;
@@ -1098,6 +1107,7 @@ function renderTimeline(layout, opts){
    9. DAY SCHEDULE — yours to edit, team can view (bar private)
    ============================================================ */
 let schedDay = todayISO();
+let buildDraft = {time:null, mins:45, kind:"media"};   // sticky add-row settings on Build Day
 
 /* ---- export a day (or the season) to calendar ---- */
 function icsEscape(t){ return String(t||"").replace(/[\\;,]/g,m=>"\\"+m).replace(/\n/g,"\\n"); }
@@ -1130,14 +1140,25 @@ function downloadICS(filename, events){
 }
 
 function timeOptions(sel){
-  let out="";
+  let out="", hit=false;
   for(let h=4; h<24; h++){
-    for(const m of [0,15,30,45]){
+    for(let m=0; m<60; m+=5){                      // 5-minute increments
       const t=String(h).padStart(2,"0")+":"+String(m).padStart(2,"0");
+      if(t===sel) hit=true;
       out+=`<option value="${t}" ${t===sel?"selected":""}>${t}</option>`;
     }
   }
+  // keep an already-saved off-grid time (e.g. 09:07) selectable rather than silently resetting
+  if(sel && !hit) out=`<option value="${sel}" selected>${sel}</option>`+out;
   return out;
+}
+
+/* Durations, also in 5s up to an hour, then coarser. */
+function minsOptions(sel){
+  const list=[];
+  for(let m=5; m<=120; m+=5) list.push(m);
+  [150,180,210,240,300,360].forEach(m=>list.push(m));
+  return list.map(m=>`<option value="${m}" ${m===sel?"selected":""}>${durLabel(m)}</option>`).join("");
 }
 
 function addMins(hhmm, mins){
@@ -1346,11 +1367,14 @@ async function buildScreen(v){
 
   function renderBuildList(){
     const box=document.getElementById("blist");
-    // default the add-row start to the end of the last fixed item (rounded to :15)
-    let defTime="13:00";
-    if(anchors.length){
-      const last=anchors.map(i=>t2m(i.start_time)+(i.duration_mins||0)).filter(x=>!isNaN(x)).sort((a,b)=>b-a)[0];
-      if(last!=null){ const r=Math.ceil(last/15)*15; if(r<DAY_END_MIN) defTime=m2t(r); }
+    // whatever you last set stays put; otherwise start at the end of the last fixed item
+    let defTime=buildDraft.time;
+    if(!defTime){
+      defTime="13:00";
+      if(anchors.length){
+        const last=anchors.map(i=>t2m(i.start_time)+(i.duration_mins||0)).filter(x=>!isNaN(x)).sort((a,b)=>b-a)[0];
+        if(last!=null){ const r=Math.ceil(last/5)*5; if(r<DAY_END_MIN) defTime=m2t(r); }
+      }
     }
 
     // the day, in time order, each row editable inline
@@ -1371,12 +1395,9 @@ async function buildScreen(v){
            border:1px dashed var(--blood-2); border-radius:9px; margin-top:10px; flex-wrap:wrap">
         <span style="font-size:20px; color:var(--blood-2); font-weight:700; line-height:1">+</span>
         <select id="a-kind" style="flex:1; min-width:88px">
-          <option value="media">Media</option><option value="travel">Travel</option>
-          <option value="gym">Gym</option><option value="other">Other</option></select>
+          ${["media","travel","gym","other"].map(k=>`<option value="${k}" ${k===buildDraft.kind?"selected":""}>${KIND_STYLE[k].label}</option>`).join("")}</select>
         <select id="a-time" style="flex:1; min-width:78px">${timeOptions(defTime)}</select>
-        <select id="a-mins" style="flex:1; min-width:70px">
-          ${[15,30,45,60,90,120,180,240].map(m=>`<option value="${m}" ${m===45?"selected":""}>${durLabel(m)}</option>`).join("")}
-        </select>
+        <select id="a-mins" style="flex:1; min-width:70px">${minsOptions(buildDraft.mins)}</select>
         <input id="a-label" placeholder="Label" style="flex:2; min-width:110px">
         <label class="inline" style="font-size:12px; color:var(--muted); flex:0 0 auto"><input type="checkbox" id="a-priv" style="width:auto"> Private</label>
         <button class="btn btn-primary btn-sm" id="a-add" style="flex:0 0 auto">Add</button>
@@ -1384,7 +1405,12 @@ async function buildScreen(v){
 
     box.innerHTML = dayRows + addRow;
 
+    // hold on to the add-row settings so switching tabs or days doesn't reset them
+    const remember=()=>{ buildDraft.time=val("a-time"); buildDraft.mins=+val("a-mins")||45; buildDraft.kind=val("a-kind"); };
+    ["a-time","a-mins","a-kind"].forEach(id=>{ const el=document.getElementById(id); if(el) el.onchange=remember; });
+
     document.getElementById("a-add").onclick=async()=>{
+      remember();
       const kind=val("a-kind"), st2=t2m(val("a-time")), len=+val("a-mins")||0;
       const clash=anchors.filter(i=>i.start_time)
         .find(i=>{ const s2=t2m(i.start_time), e2=s2+(i.duration_mins||0); return st2 < e2 && (st2+len) > s2; });

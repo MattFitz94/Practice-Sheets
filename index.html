@@ -989,7 +989,7 @@ function layoutDay(items, drills, dayStart){
 function renderTimeline(layout, opts){
   const {blocks, gaps, overlaps} = layout;
   const START=DAY_START_MIN, END=DAY_END_MIN;
-  const PXPM=1.15;                 // pixels per minute — taller so short blocks have room
+  const PXPM=1.6;                  // pixels per minute — roomy, since the day scrolls anyway
   const LABEL_W=46;
   const totalH=(END-START)*PXPM;
   const y = m => (m-START)*PXPM;
@@ -1016,23 +1016,34 @@ function renderTimeline(layout, opts){
      start/finish line up with the hour gutter. Same look as the list below:
      name top-left, time under it, category on the right. */
   const FOOT_H = 21;                         // summary strip along the bottom of the bubble
-  const drillRows = (b, st) => b.drills.map(d=>{
-    const dTop=(d.s-b.s)*PXPM, dH=Math.max((d.e-d.s)*PXPM, 16);
-    const full = dH>=44;                     // room for name + time stacked
-    return `<div style="position:absolute; top:${dTop}px; height:${dH-3}px; left:0; right:0; box-sizing:border-box;
+  const MIN_ROW = 54;                        // a row never gets smaller than its own text
+  // rough line count for the drill name — the pill takes the right half, so ~24 chars fit
+  const rowNeed = name => 37 + 17*Math.min(3, Math.max(1, Math.ceil((name||"").length/24)));
+  /* Rows sit on their time span, but never below MIN_ROW. If a short drill needs more
+     room than its slice, the rows after it shift down rather than being squashed —
+     so nothing is ever clipped. Returns the html plus the height it actually used. */
+  const drillRows = (b, st) => {
+    let cursor=0, html="";
+    b.drills.forEach(d=>{
+      const rowTop=Math.max((d.s-b.s)*PXPM, cursor);
+      const rowH=Math.max((d.e-d.s)*PXPM-4, MIN_ROW, rowNeed(d.name));
+      cursor=rowTop+rowH+4;
+      html+=`<div style="position:absolute; top:${rowTop}px; height:${rowH}px; left:0; right:0; box-sizing:border-box;
         background:rgba(0,0,0,.22); border-left:2px solid ${st.ac}; border-radius:6px;
-        padding:${full?"7px":"3px"} 10px; overflow:hidden;
-        display:flex; align-items:${full?"flex-start":"center"}; justify-content:space-between; gap:10px">
-      <div style="min-width:0">
-        <div style="font-size:13px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(d.name)}</div>
-        <div style="font-size:11px; font-weight:700; color:${st.ac}; margin-top:${full?3:0}px; white-space:nowrap">${m2t(d.s)}–${m2t(d.e)}</div>
+        padding:9px 10px; overflow:hidden;
+        display:flex; align-items:flex-start; justify-content:space-between; gap:10px">
+      <div style="min-width:0; flex:1">
+        <div style="font-size:13px; font-weight:600; color:var(--ink); line-height:1.3">${esc(d.name)}</div>
+        <div style="font-size:11px; font-weight:700; color:${st.ac}; margin-top:4px; white-space:nowrap">${m2t(d.s)}–${m2t(d.e)}</div>
       </div>
-      ${full&&d.category?`<div style="flex-shrink:0; text-align:right">
+      ${d.category?`<div style="flex-shrink:0; text-align:right">
         <span class="pill ${pillClass(d.category)}">${esc(d.category)}</span>
         <div style="font-size:11px; color:var(--faint); margin-top:4px">${d.minutes||0}m</div>
       </div>`:""}
     </div>`;
-  }).join("");
+    });
+    return {html, used:cursor};
+  };
 
   const blockEls = blocks.map(b=>{
     const st=KIND_STYLE[b.kind]||KIND_STYLE.other;
@@ -1040,20 +1051,23 @@ function renderTimeline(layout, opts){
     const h=Math.max(realH,20);
     const hasDrills = !!(b.drills && b.drills.length);
     const clickable = opts.linkPractice && b.kind==="practice";
-    const shell = (inner, pad) => `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${top}px; height:${h}px; left:${LABEL_W+6}px; right:2px;
+    const shell = (inner, pad, height) => `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${top}px; height:${height||h}px; left:${LABEL_W+6}px; right:2px;
         background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:7px; padding:${pad}; overflow:hidden; ${clickable?"cursor:pointer":""}">${inner}</div>`;
 
     if(b.kind==="practice" && hasDrills){
+      const rows = drillRows(b,st);
       const foot = realH>=90;                // only when the bubble can spare the strip
+      // grow the bubble if the rows needed more room than the block's duration gives
+      const bh = Math.max(h, rows.used + (foot?FOOT_H:0) + 6);
       return shell(`
-        <div style="position:absolute; top:2px; left:6px; right:2px; bottom:2px">${drillRows(b,st)}</div>
+        <div style="position:absolute; top:2px; left:6px; right:2px; bottom:2px">${rows.html}</div>
         ${foot?`<div style="position:absolute; left:6px; right:2px; bottom:2px; height:${FOOT_H}px; box-sizing:border-box; z-index:2;
             display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 10px;
             background:rgba(0,0,0,.42); border-top:1px solid rgba(255,255,255,.07); border-radius:0 0 6px 6px;
             font-size:10.5px; letter-spacing:.03em">
           <span style="color:var(--muted); white-space:nowrap">${b.drills.length} drill${b.drills.length>1?"s":""} · <b style="color:var(--ink); font-weight:700">${durLabel(b.e-b.s)}</b></span>
           <span style="color:${st.ac}; font-weight:700; white-space:nowrap">${m2t(b.s)}–${m2t(b.e)}${clickable?" ›":""}</span>
-        </div>`:""}`, "0");
+        </div>`:""}`, "0", bh);
     }
 
     const roomForNote = realH>40;

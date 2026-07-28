@@ -198,6 +198,20 @@
     .sec-h h2{font-size:19px}
     .cbox{max-height:88vh}
   }
+
+  /* training load + drill rotation */
+  .clist input,.clist select{width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--panel-2); color:var(--ink)}
+  .clist input[type=checkbox]{width:auto}
+  .ld-head{display:flex; align-items:flex-start; gap:14px; margin-bottom:14px}
+  .ld-word{font-family:"Archivo",sans-serif; font-weight:900; font-size:26px; line-height:1; text-transform:uppercase; letter-spacing:-.01em}
+  .ld-ratio{margin-left:auto; text-align:right; flex-shrink:0}
+  .ld-ratio .n{font-family:"Archivo"; font-weight:900; font-size:26px; letter-spacing:-.02em; line-height:1}
+  .ld-ratio .l{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; margin-top:3px}
+  .ld-bars{display:flex; align-items:flex-end; gap:2px; height:64px; margin-bottom:5px}
+  .ld-bars i{flex:1; min-width:0; border-radius:2px 2px 0 0; background:var(--line); display:block}
+  .ld-scale{display:flex; justify-content:space-between; font-size:10px; color:var(--faint); text-transform:uppercase; letter-spacing:.06em}
+  .ld-note{font-size:12.5px; color:var(--muted); margin:12px 0 0; line-height:1.55}
+  .rot-gap{font-size:12px; font-weight:800; flex:0 0 auto; text-align:right}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -1397,10 +1411,11 @@ async function buildScreen(v){
     const dayRows = anchors.length ? anchors.map(it=>{
       const st=KIND_STYLE[it.kind]||KIND_STYLE.other;
       const end = it.start_time ? m2t(t2m(it.start_time)+(it.duration_mins||0)) : "";
-      return `<div class="row-item" style="border-left:3px solid ${st.ac}; padding-left:10px">
+      return `<div class="row-item" data-edit="${it.id}" style="border-left:3px solid ${st.ac}; padding-left:10px; cursor:pointer">
         <span class="pill" style="background:${st.bg}; color:${st.ac}">${st.label}</span>
         <div class="name">${esc(it.label||st.label)}
           <small>${it.start_time||"—"}${end?" – "+end:""} · ${durLabel(it.duration_mins||0)}${it.is_private?" · private":""}</small></div>
+        <span class="who" style="font-size:11px; flex:0 0 auto">Edit</span>
         <button class="rowdel" data-id="${it.id}" title="Remove" style="font-size:20px; padding:0 8px">×</button>
       </div>`;
     }).join("") : `<div class="empty" style="border:0; padding:14px">No fixed items yet. Add one below, or apply a template.</div>`;
@@ -1438,12 +1453,62 @@ async function buildScreen(v){
       flash("Added"); keepScroll(()=>buildScreen(v));
     };
 
-    box.querySelectorAll(".rowdel").forEach(b=>b.onclick=async()=>{
+    box.querySelectorAll(".rowdel").forEach(b=>b.onclick=async(e)=>{
+      e.stopPropagation();
       if(!confirm("Remove this from the day?")) return;
       const {error}=await sb.from("schedule_items").delete().eq("id",b.dataset.id);
       if(error){ flash(error.message); return; }
       flash("Removed"); keepScroll(()=>buildScreen(v));
     });
+
+    // tap a row to change it in place, rather than delete and re-add
+    box.querySelectorAll("[data-edit]").forEach(el=>el.onclick=(e)=>{
+      if(e.target.closest(".rowdel")) return;
+      const it=anchors.find(x=>String(x.id)===el.dataset.edit);
+      if(it) editItem(it);
+    });
+  }
+
+  /* Edit one fixed item in place. Same fields as the add row, pre-filled. */
+  function editItem(it){
+    const st=KIND_STYLE[it.kind]||KIND_STYLE.other;
+    const wrap=document.createElement("div"); wrap.className="cmodal";
+    wrap.innerHTML=`<div class="cbox">
+      <div class="chead"><div><b>Edit item</b><div class="who">${esc(it.label||st.label)}</div></div>
+        <button class="cx" id="eix">×</button></div>
+      <div class="clist" style="padding:14px 16px">
+        <div class="field"><label class="mini">Type</label>
+          <select id="ei-kind">${["media","travel","gym","other"].map(k=>`<option value="${k}" ${k===it.kind?"selected":""}>${KIND_STYLE[k].label}</option>`).join("")}</select></div>
+        <div class="grid2">
+          <div><label class="mini">Start</label><select id="ei-time">${timeOptions(it.start_time||"09:00")}</select></div>
+          <div><label class="mini">Length</label><select id="ei-mins">${minsOptions(it.duration_mins||45)}</select></div>
+        </div>
+        <div class="field" style="margin-top:12px"><label class="mini">Label</label>
+          <input id="ei-label" placeholder="Label" value="${esc(it.label||"")}"></div>
+        <label class="inline" style="font-size:12px; color:var(--muted); margin-top:4px">
+          <input type="checkbox" id="ei-priv" ${it.is_private?"checked":""}> Private</label>
+      </div>
+      <div class="cfoot">
+        <button class="btn btn-ghost btn-sm" id="ei-cancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="ei-save" style="margin-left:auto">Save changes</button>
+      </div></div>`;
+    document.body.appendChild(wrap);
+    const close=()=>wrap.remove();
+    wrap.onclick=e=>{ if(e.target===wrap) close(); };
+    document.getElementById("eix").onclick=close;
+    document.getElementById("ei-cancel").onclick=close;
+    document.getElementById("ei-save").onclick=async()=>{
+      const st2=t2m(val("ei-time")), len=+val("ei-mins")||0;
+      const clash=anchors.filter(i=>String(i.id)!==String(it.id) && i.start_time)
+        .find(i=>{ const s2=t2m(i.start_time), e2=s2+(i.duration_mins||0); return st2 < e2 && (st2+len) > s2; });
+      if(clash && !confirm(`This overlaps "${clash.label||clash.kind}" at ${clash.start_time}. Save anyway?`)) return;
+      const {error}=await sb.from("schedule_items").update({
+        kind:val("ei-kind"), start_time:val("ei-time"), duration_mins:len,
+        label:val("ei-label")||null, is_private:document.getElementById("ei-priv").checked
+      }).eq("id", it.id);
+      if(error){ flash(error.message); return; }
+      flash("Updated"); close(); keepScroll(()=>buildScreen(v));
+    };
   }
 }
 
@@ -2707,30 +2772,162 @@ async function library(v){
 /* ============================================================
    8. PROGRESS — category balance, last 7 days
    ============================================================ */
+/* ============================================================
+   14. PROGRESS — last 7 days, training load, drill rotation
+   ============================================================ */
+
+/* Local dates only. Never toISOString() — that's UTC and lands
+   on the wrong day outside UTC. */
+function daysAgoISO(n){ const d=new Date(); d.setDate(d.getDate()-n); return isoDate(d); }
+function daysBetweenISO(a,b){ return Math.round((new Date(b+"T00:00:00") - new Date(a+"T00:00:00"))/864e5); }
+
+/* A session counts as REAL load only if it actually happened.
+   Planned rows are excluded on purpose: they display the drill's CURRENT
+   default, so counting them would let editing a drill silently rewrite
+   your training history. Missed days don't count either. */
+function isActualSession(s){
+  if(s.status==="missed") return false;
+  return s.logged_on < todayISO() || s.status==="done";
+}
+
+/* Acute (last 7 days) vs chronic (average week over the last 28).
+   A ratio near 1 means this week looks like your recent normal. */
+const LOAD_ZONES = [
+  { max:0.79, word:"Winding down", col:"#6f9fd8",
+    note:"You're hitting noticeably fewer balls than your recent norm. Exactly right for a rest or tournament week — worth a look if it wasn't meant to be one." },
+  { max:1.30, word:"Steady", col:"#6fd8ab",
+    note:"This week is in line with the last month. This is the range to sit in most of the time." },
+  { max:1.50, word:"Ramping", col:"#c3f53c",
+    note:"You're building faster than usual. Fine for a block, but worth watching if it runs several weeks back to back." },
+  { max:999, word:"Spike", col:"#e0864f",
+    note:"This week is well above your recent norm. Sharp jumps in volume are the pattern most often linked to overuse niggles." }
+];
+function loadZone(r){ return LOAD_ZONES.find(z => r <= z.max); }
+
+const ROT_DAYS = 42;   // a drill goes "cold" after six weeks unused
+
 async function progress(v){
   const pid = me.role==="coach" ? (activePlayerId||players[0]?.id) : me.id;
   if(!pid){ v.innerHTML=`<div class="empty">Link a player first.</div>`; return; }
-  const weekAgo=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
-  const {data}=await sb.from("sessions").select("*, drills(category)").eq("player_id",pid).gte("logged_on",weekAgo);
+
+  await refreshDrills();
+  const today = todayISO(), from28 = daysAgoISO(27), from7 = daysAgoISO(6);
+
+  const [{data:recent},{data:history}] = await Promise.all([
+    sb.from("sessions").select("logged_on, balls, minutes, status, drills(category)")
+      .eq("player_id",pid).gte("logged_on",from28).lte("logged_on",today),
+    sb.from("sessions").select("drill_id, logged_on, status")
+      .eq("player_id",pid).lte("logged_on",today)
+  ]);
+  const rec = (recent||[]).filter(isActualSession);
+
+  /* ---- last 7 days ---- */
+  const wk = rec.filter(s => s.logged_on >= from7);
   const byCat={}; CATS.forEach(c=>byCat[c]=0);
-  let balls=0,mins=0; const days=new Set();
-  (data||[]).forEach(s=>{ const c=s.drills?.category||"Technical"; byCat[c]=(byCat[c]||0)+(s.balls||0); balls+=s.balls||0; mins+=+s.minutes||0; days.add(s.logged_on); });
-  const max=Math.max(1,...Object.values(byCat));
+  let balls=0, mins=0; const days=new Set();
+  wk.forEach(s=>{
+    const c=s.drills?.category||"Technical";
+    byCat[c]=(byCat[c]||0)+(+s.balls||0);
+    balls+=+s.balls||0; mins+=+s.minutes||0; days.add(s.logged_on);
+  });
+  const maxCat=Math.max(1,...Object.values(byCat));
+
+  /* ---- training load, in balls ---- */
+  const byDay={};
+  for(let i=27;i>=0;i--) byDay[daysAgoISO(i)]=0;
+  rec.forEach(s=>{ if(byDay[s.logged_on]!=null) byDay[s.logged_on]+=(+s.balls||0); });
+  const keys=Object.keys(byDay).sort();
+  const acute   = keys.slice(-7).reduce((a,k)=>a+byDay[k],0);
+  const total28 = keys.reduce((a,k)=>a+byDay[k],0);
+  const chronic = total28/4;                       // average week across 4 weeks
+  const activeDays = keys.filter(k=>byDay[k]>0).length;
+  const ratio = chronic>0 ? acute/chronic : null;
+  const zone  = ratio!=null ? loadZone(ratio) : null;
+  const maxDay= Math.max(1,...keys.map(k=>byDay[k]));
+  const thin  = activeDays < 8;                    // not enough days to lean on
+
+  const loadCard = ratio==null
+    ? `<div class="empty" style="border:0; padding:18px">Nothing logged in the last 28 days, so there's no load to compare against yet.</div>`
+    : `<div class="ld-head">
+         <div>
+           <div class="ld-word" style="color:${zone.col}">${zone.word}</div>
+           <div class="who" style="margin-top:5px">${acute.toLocaleString()} balls this week · ${Math.round(chronic).toLocaleString()} typical</div>
+         </div>
+         <div class="ld-ratio"><div class="n" style="color:${zone.col}">${ratio.toFixed(2)}</div><div class="l">Ratio</div></div>
+       </div>
+       <div class="ld-bars">
+         ${keys.map((k,i)=>{
+           const h = Math.round(byDay[k]/maxDay*60);
+           const recentWk = i >= keys.length-7;
+           return `<i title="${k}: ${byDay[k]} balls" style="height:${Math.max(2,h)}px; background:${recentWk?zone.col:"var(--line)"}"></i>`;
+         }).join("")}
+       </div>
+       <div class="ld-scale"><span>4 weeks ago</span><span>Today</span></div>
+       <p class="ld-note">${zone.note}</p>
+       <p class="ld-note" style="color:var(--faint)">${thin
+          ? `Only ${activeDays} days logged in the last four weeks — treat the ratio as a rough steer, not a number to act on.`
+          : `Compares this week's balls against your average week over the last 28 days. Planned days aren't counted, only what you actually logged. It's a prompt to look, not a verdict.`}</p>`;
+
+  /* ---- drill rotation ---- */
+  const lastUsed={};
+  (history||[]).filter(isActualSession).forEach(s=>{
+    if(!s.drill_id) return;
+    if(!lastUsed[s.drill_id] || s.logged_on > lastUsed[s.drill_id]) lastUsed[s.drill_id]=s.logged_on;
+  });
+  const allDrills = Object.values(drillMap);
+  const cold = allDrills.map(d=>({
+      d, last:lastUsed[d.id]||null,
+      gap: lastUsed[d.id] ? daysBetweenISO(lastUsed[d.id], today) : null
+    }))
+    .filter(x => x.gap===null || x.gap>=ROT_DAYS)
+    .sort((a,b)=> (b.gap==null?99999:b.gap) - (a.gap==null?99999:a.gap));
+  const warm = allDrills.length - cold.length;
+  const show = cold.slice(0,12);
+
+  const rotCard = !allDrills.length
+    ? `<div class="empty" style="border:0; padding:18px">No drills in the library yet.</div>`
+    : !cold.length
+      ? `<div class="empty" style="border:0; padding:18px">Every drill in the library has been used in the last six weeks.</div>`
+      : show.map(x=>{
+          const gapTxt = x.gap==null ? "Never used" : Math.floor(x.gap/7)+" weeks ago";
+          const col = x.gap==null ? "var(--faint)" : x.gap>=182 ? "#e0864f" : x.gap>=84 ? "#e0a26f" : "var(--muted)";
+          return `<div class="row-item">
+            <span class="pill ${pillClass(x.d.category)}">${esc(x.d.category||"—")}</span>
+            <div class="name">${esc(x.d.name)}
+              <small>${x.last ? "Last done "+new Date(x.last+"T00:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"}) : "Not in any logged session"}</small></div>
+            <span class="rot-gap" style="color:${col}">${gapTxt}</span>
+          </div>`;
+        }).join("")
+        + (cold.length>show.length ? `<p class="ld-note">${cold.length-show.length} more not shown.</p>` : "");
+
   const picker = me.role==="coach" && players.length
     ? `<select id="ppick" style="background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 10px;font-weight:700">${players.map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${esc(p.name)}</option>`).join("")}</select>`
     : "";
+
   v.innerHTML=`
     <div class="sec-h"><h2>Last 7 days</h2>${picker}</div>
     <div class="stat-row">
-      ${stat(data?.length||0,"Sessions")}${stat(Math.round(mins),"Minutes")}${stat(balls,"Balls")}${stat(days.size,"Days on")}
+      ${stat(wk.length,"Sessions")}${stat(Math.round(mins),"Minutes")}${stat(balls,"Balls")}${stat(days.size,"Days on")}
     </div>
     <div class="card">
       <h3 style="font-size:14px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:14px">Balls by category</h3>
-      ${CATS.map(c=>`<div class="barwrap"><div class="lab"><span>${c}</span><span>${byCat[c]}</span></div><div class="bar"><i style="width:${Math.round(byCat[c]/max*100)}%"></i></div></div>`).join("")}
+      ${CATS.map(c=>`<div class="barwrap"><div class="lab"><span>${c}</span><span>${byCat[c]}</span></div><div class="bar"><i style="width:${Math.round(byCat[c]/maxCat*100)}%"></i></div></div>`).join("")}
     </div>
-    ${!data?.length?'<div class="empty" style="margin-top:14px">No sessions logged in the last 7 days.</div>':''}`;
-  if(me.role==="coach" && players.length){ document.getElementById("ppick").onchange=e=>{ activePlayerId=e.target.value; progress(v); }; }
+    ${!wk.length?'<div class="empty" style="margin-top:14px">No sessions logged in the last 7 days.</div>':''}
+
+    <div class="sec-h" style="margin-top:26px"><h2>Training load</h2>
+      <span class="meta">Balls · this week vs your last 4</span></div>
+    <div class="card">${loadCard}</div>
+
+    <div class="sec-h" style="margin-top:26px"><h2>Drill rotation</h2>
+      <span class="meta">${warm} in rotation · ${cold.length} gone cold</span></div>
+    <div class="card">${rotCard}</div>`;
+
+  if(me.role==="coach" && players.length){
+    document.getElementById("ppick").onchange=e=>{ activePlayerId=e.target.value; progress(v); };
+  }
 }
+
 function stat(n,l){ return `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`; }
 
 /* Save immediately when the app goes to the background. On iOS, Safari

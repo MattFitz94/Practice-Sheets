@@ -1012,24 +1012,48 @@ function renderTimeline(layout, opts){
 
   // blocks sit exactly on their time span. Height = true duration.
   // Content shown scales to available height so nothing overflows into the next.
+  /* Drill rows inside the practice bubble. Each sits on its own time span, so the
+     start/finish line up with the hour gutter. Same look as the list below:
+     name top-left, time under it, category on the right. */
+  const drillRows = (b, st) => b.drills.map(d=>{
+    const dTop=(d.s-b.s)*PXPM, dH=Math.max((d.e-d.s)*PXPM, 16);
+    const full = dH>=44;                     // room for name + time stacked
+    return `<div style="position:absolute; top:${dTop}px; height:${dH-3}px; left:0; right:0; box-sizing:border-box;
+        background:rgba(0,0,0,.22); border-left:2px solid ${st.ac}; border-radius:6px;
+        padding:${full?"7px":"3px"} 10px; overflow:hidden;
+        display:flex; align-items:${full?"flex-start":"center"}; justify-content:space-between; gap:10px">
+      <div style="min-width:0">
+        <div style="font-size:13px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(d.name)}</div>
+        <div style="font-size:11px; font-weight:700; color:${st.ac}; margin-top:${full?3:0}px; white-space:nowrap">${m2t(d.s)}–${m2t(d.e)}</div>
+      </div>
+      ${full&&d.category?`<div style="flex-shrink:0; text-align:right">
+        <span class="pill ${pillClass(d.category)}">${esc(d.category)}</span>
+        <div style="font-size:11px; color:var(--faint); margin-top:4px">${d.minutes||0}m</div>
+      </div>`:""}
+    </div>`;
+  }).join("");
+
   const blockEls = blocks.map(b=>{
     const st=KIND_STYLE[b.kind]||KIND_STYLE.other;
     const top=y(b.s), realH=y(b.e)-y(b.s);
     const h=Math.max(realH,20);
-    const hasDrills   = !!(b.drills && b.drills.length);
-    const roomForNote = realH>40;
-    const roomForHint = realH>72 && hasDrills;
+    const hasDrills = !!(b.drills && b.drills.length);
     const clickable = opts.linkPractice && b.kind==="practice";
-    // The bubble stays a summary — full drill detail is in the grouped list below.
-    return `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${top}px; height:${h}px; left:${LABEL_W+6}px; right:2px;
-        background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:7px; padding:6px 10px; overflow:hidden; ${clickable?"cursor:pointer":""}">
+    const shell = (inner, pad) => `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${top}px; height:${h}px; left:${LABEL_W+6}px; right:2px;
+        background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:7px; padding:${pad}; overflow:hidden; ${clickable?"cursor:pointer":""}">${inner}</div>`;
+
+    if(b.kind==="practice" && hasDrills){
+      return shell(`
+        <div style="position:absolute; top:2px; left:6px; right:2px; bottom:2px">${drillRows(b,st)}</div>`, "0");
+    }
+
+    const roomForNote = realH>40;
+    return shell(`
       <div style="display:flex; justify-content:space-between; gap:8px; align-items:baseline">
         <span style="font-size:13px; font-weight:700; color:var(--ink)">${esc(b.label||st.label)}${b.is_private?' <span style="font-size:9px;color:var(--faint)">PRIVATE</span>':''}</span>
         <span style="font-size:11px; color:${st.ac}; font-weight:700; white-space:nowrap">${m2t(b.s)}–${m2t(b.e)}</span>
       </div>
-      ${roomForNote&&b.note?`<div style="font-size:10px; color:var(--muted); margin-top:1px">${esc(b.note)}</div>`:""}
-      ${clickable&&roomForHint?`<div style="font-size:10px; color:${st.ac}; margin-top:5px">Open on the sheet →</div>`:""}
-    </div>`;
+      ${roomForNote&&b.note?`<div style="font-size:10px; color:var(--muted); margin-top:1px">${esc(b.note)}</div>`:""}`, "6px 10px");
   }).join("");
 
   const warn = overlaps.length
@@ -1047,7 +1071,7 @@ function renderTimeline(layout, opts){
      underneath, category and duration on the right. */
   const pBlocks = blocks.filter(b=>b.kind==="practice" && b.drills && b.drills.length);
   const grouped = pBlocks.length ? `
-    <div style="margin-top:16px">
+    <div style="margin-bottom:18px">
       <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint); margin-bottom:8px">Practice drills</div>
       ${pBlocks.map(b=>{
         const ac=KIND_STYLE.practice.ac;
@@ -1076,9 +1100,8 @@ function renderTimeline(layout, opts){
       }).join("")}
     </div>` : "";
 
-  return warn+unplaced+legend+
-    `<div class="gridwrap" style="padding:10px 8px 10px 4px"><div style="position:relative; height:${totalH}px">${hours}${gapEls}${blockEls}</div></div>`+
-    grouped;
+  return warn+unplaced+grouped+legend+
+    `<div class="gridwrap" style="padding:10px 8px 10px 4px"><div style="position:relative; height:${totalH}px">${hours}${gapEls}${blockEls}</div></div>`;
 }
 
 /* ============================================================

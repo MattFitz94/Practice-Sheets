@@ -1015,6 +1015,7 @@ function renderTimeline(layout, opts){
   /* Drill rows inside the practice bubble. Each sits on its own time span, so the
      start/finish line up with the hour gutter. Same look as the list below:
      name top-left, time under it, category on the right. */
+  const FOOT_H = 21;                         // summary strip along the bottom of the bubble
   const drillRows = (b, st) => b.drills.map(d=>{
     const dTop=(d.s-b.s)*PXPM, dH=Math.max((d.e-d.s)*PXPM, 16);
     const full = dH>=44;                     // room for name + time stacked
@@ -1043,8 +1044,16 @@ function renderTimeline(layout, opts){
         background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:7px; padding:${pad}; overflow:hidden; ${clickable?"cursor:pointer":""}">${inner}</div>`;
 
     if(b.kind==="practice" && hasDrills){
+      const foot = realH>=90;                // only when the bubble can spare the strip
       return shell(`
-        <div style="position:absolute; top:2px; left:6px; right:2px; bottom:2px">${drillRows(b,st)}</div>`, "0");
+        <div style="position:absolute; top:2px; left:6px; right:2px; bottom:2px">${drillRows(b,st)}</div>
+        ${foot?`<div style="position:absolute; left:6px; right:2px; bottom:2px; height:${FOOT_H}px; box-sizing:border-box; z-index:2;
+            display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 10px;
+            background:rgba(0,0,0,.42); border-top:1px solid rgba(255,255,255,.07); border-radius:0 0 6px 6px;
+            font-size:10.5px; letter-spacing:.03em">
+          <span style="color:var(--muted); white-space:nowrap">${b.drills.length} drill${b.drills.length>1?"s":""} · <b style="color:var(--ink); font-weight:700">${durLabel(b.e-b.s)}</b></span>
+          <span style="color:${st.ac}; font-weight:700; white-space:nowrap">${m2t(b.s)}–${m2t(b.e)}${clickable?" ›":""}</span>
+        </div>`:""}`, "0");
     }
 
     const roomForNote = realH>40;
@@ -1067,40 +1076,7 @@ function renderTimeline(layout, opts){
     <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:10px;border-radius:3px;border:1px dashed var(--line);display:inline-block"></i>Free</span>
   </div>`;
 
-  /* Grouped drill list — the readable view. Name top-left, its start–finish
-     underneath, category and duration on the right. */
-  const pBlocks = blocks.filter(b=>b.kind==="practice" && b.drills && b.drills.length);
-  const grouped = pBlocks.length ? `
-    <div style="margin-bottom:18px">
-      <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint); margin-bottom:8px">Practice drills</div>
-      ${pBlocks.map(b=>{
-        const ac=KIND_STYLE.practice.ac;
-        const totals={};
-        b.drills.forEach(d=>{ const c=d.category||"Other"; totals[c]=(totals[c]||0)+(+d.minutes||0); });
-        return `<div style="background:var(--panel); border:1px solid var(--line); border-left:3px solid ${ac}; border-radius:8px; padding:10px 12px; margin-bottom:10px">
-          <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:6px">
-            <span style="font-size:13px; font-weight:800; color:var(--ink)">Practice</span>
-            <span style="font-size:11px; font-weight:700; color:${ac}; white-space:nowrap">${m2t(b.s)}–${m2t(b.e)} · ${durLabel(b.e-b.s)}</span>
-          </div>
-          ${b.drills.map(d=>`
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-top:1px solid var(--line)">
-              <div style="min-width:0">
-                <div style="font-size:13px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(d.name)}</div>
-                <div style="font-size:11px; font-weight:700; color:${ac}; margin-top:3px; white-space:nowrap">${m2t(d.s)}–${m2t(d.e)}</div>
-              </div>
-              <div style="flex-shrink:0; text-align:right">
-                ${d.category?`<span class="pill ${pillClass(d.category)}">${esc(d.category)}</span>`:""}
-                <div style="font-size:11px; color:var(--faint); margin-top:4px">${d.minutes||0}m</div>
-              </div>
-            </div>`).join("")}
-          <div style="display:flex; flex-wrap:wrap; gap:5px 12px; margin-top:8px; padding-top:7px; border-top:1px solid var(--line); font-size:11px; color:var(--muted)">
-            ${Object.keys(totals).map(c=>`<span>${esc(c)} · <b style="color:var(--ink)">${durLabel(totals[c])||"0m"}</b></span>`).join("")}
-          </div>
-        </div>`;
-      }).join("")}
-    </div>` : "";
-
-  return warn+unplaced+grouped+legend+
+  return warn+unplaced+legend+
     `<div class="gridwrap" style="padding:10px 8px 10px 4px"><div style="position:relative; height:${totalH}px">${hours}${gapEls}${blockEls}</div></div>`;
 }
 

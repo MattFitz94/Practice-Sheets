@@ -991,30 +991,7 @@ function renderTimeline(layout, opts){
   const START=DAY_START_MIN, END=DAY_END_MIN;
   const PXPM=1.6;                  // pixels per minute — roomy, since the day scrolls anyway
   const LABEL_W=46;
-  const totalH=(END-START)*PXPM;
-  const y = m => (m-START)*PXPM;
 
-  // hour lines
-  let hours="";
-  for(let h=5; h<=22; h++){
-    const top=y(h*60);
-    hours+=`<div style="position:absolute; top:${top}px; left:0; width:${LABEL_W-4}px; font-size:10px; color:var(--faint); transform:translateY(-6px); text-align:right">${String(h).padStart(2,"0")}:00</div>
-            <div style="position:absolute; top:${top}px; left:${LABEL_W}px; right:0; border-top:1px solid var(--line); opacity:.3"></div>`;
-  }
-
-  // gaps sit exactly on their time span
-  const gapEls = gaps.map(g=>{
-    const top=y(g.s), h=Math.max(y(g.e)-y(g.s),18);
-    return `<div style="position:absolute; top:${top}px; height:${h}px; left:${LABEL_W+6}px; right:2px;
-        border:1px dashed var(--line); border-radius:6px; display:flex; align-items:center; justify-content:center">
-      <span style="font-size:10px; color:var(--faint); letter-spacing:.05em">FREE · ${durLabel(g.e-g.s)}</span></div>`;
-  }).join("");
-
-  // blocks sit exactly on their time span. Height = true duration.
-  // Content shown scales to available height so nothing overflows into the next.
-  /* Drill rows inside the practice bubble. Each sits on its own time span, so the
-     start/finish line up with the hour gutter. Same look as the list below:
-     name top-left, time under it, category on the right. */
   const FOOT_H = 21;                         // summary strip along the bottom of the bubble
   const footStrip = (b, st, clickable) => `<div style="position:absolute; left:6px; right:2px; bottom:2px; height:${FOOT_H}px; box-sizing:border-box; z-index:2;
       display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 10px;
@@ -1027,8 +1004,7 @@ function renderTimeline(layout, opts){
   // rough line count for the drill name — the pill takes the right half, so ~24 chars fit
   const rowNeed = name => 37 + 17*Math.min(3, Math.max(1, Math.ceil((name||"").length/24)));
   /* Rows sit on their time span, but never below MIN_ROW. If a short drill needs more
-     room than its slice, the rows after it shift down rather than being squashed —
-     so nothing is ever clipped. Returns the html plus the height it actually used. */
+     room than its slice, the rows after it shift down rather than being squashed. */
   const drillRows = (b, st) => {
     let cursor=0, html="";
     b.drills.forEach(d=>{
@@ -1052,34 +1028,74 @@ function renderTimeline(layout, opts){
     return {html, used:cursor};
   };
 
-  const blockEls = blocks.map((b,bi)=>{
+  /* ---- measure pass ----
+     Work out how tall each block actually needs to be, then stretch the page to suit.
+     A block is never shorter than its duration, and never scrolls inside itself:
+     if its drills need more room, everything below simply moves down. */
+  const meta = blocks.map(b=>{
     const st=KIND_STYLE[b.kind]||KIND_STYLE.other;
-    const top=y(b.s), realH=y(b.e)-y(b.s);
-    const h=Math.max(realH,20);
-    // a bubble may grow for its rows, but never past whatever comes next
-    const nextTop = bi+1<blocks.length ? y(blocks[bi+1].s) : totalH;
-    const ceiling = Math.max(nextTop-top-4, h);
-    const hasDrills = !!(b.drills && b.drills.length);
+    const natural=Math.max((b.e-b.s)*PXPM, 20);
+    let rows=null, foot=false, need=natural;
+    if(b.kind==="practice" && b.drills && b.drills.length){
+      rows=drillRows(b,st);
+      foot=(b.e-b.s)*PXPM>=90;
+      need=rows.used + (foot?FOOT_H:0) + 6;
+    }
+    return {b, st, rows, foot, h:Math.max(natural, need)};
+  });
+
+  /* Time → pixel map. Linear at PXPM through free time, and each block occupies
+     its own measured height, so nothing overlaps and nothing is clipped. */
+  const pts=[[START,0]];
+  let cy=0, prevM=START;
+  meta.forEach(mt=>{
+    cy += Math.max(0, mt.b.s-prevM)*PXPM;
+    pts.push([mt.b.s, cy]);
+    cy += mt.h;
+    pts.push([Math.max(mt.b.e, mt.b.s+1), cy]);
+    prevM = Math.max(prevM, mt.b.e);
+  });
+  cy += Math.max(0, END-prevM)*PXPM;
+  pts.push([END, cy]);
+  const totalH = cy;
+  const y = m => {
+    if(m<=pts[0][0]) return pts[0][1];
+    for(let i=1;i<pts.length;i++){
+      const [m0,y0]=pts[i-1], [m1,y1]=pts[i];
+      if(m<=m1) return m1===m0 ? y1 : y0 + (m-m0)/(m1-m0)*(y1-y0);
+    }
+    return totalH;
+  };
+
+  // hour lines
+  let hours="";
+  for(let h=Math.ceil(START/60); h<=Math.floor(END/60); h++){
+    const top=y(h*60);
+    hours+=`<div style="position:absolute; top:${top}px; left:0; width:${LABEL_W-4}px; font-size:10px; color:var(--faint); transform:translateY(-6px); text-align:right">${String(h).padStart(2,"0")}:00</div>
+            <div style="position:absolute; top:${top}px; left:${LABEL_W}px; right:0; border-top:1px solid var(--line); opacity:.3"></div>`;
+  }
+
+  // gaps sit exactly on their time span
+  const gapEls = gaps.map(g=>{
+    const top=y(g.s), h=Math.max(y(g.e)-y(g.s),18);
+    return `<div style="position:absolute; top:${top}px; height:${h}px; left:${LABEL_W+6}px; right:2px;
+        border:1px dashed var(--line); border-radius:6px; display:flex; align-items:center; justify-content:center">
+      <span style="font-size:10px; color:var(--faint); letter-spacing:.05em">FREE · ${durLabel(g.e-g.s)}</span></div>`;
+  }).join("");
+
+  const blockEls = meta.map(mt=>{
+    const b=mt.b, st=mt.st, top=y(b.s), h=mt.h;
     const clickable = opts.linkPractice && b.kind==="practice";
-    const shell = (inner, pad, height) => `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${top}px; height:${height||h}px; left:${LABEL_W+6}px; right:2px;
+    const shell = (inner, pad) => `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${top}px; height:${h}px; left:${LABEL_W+6}px; right:2px;
         background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:7px; padding:${pad}; overflow:hidden; ${clickable?"cursor:pointer":""}">${inner}</div>`;
 
-    if(b.kind==="practice" && hasDrills){
-      const rows = drillRows(b,st);
-      const foot = realH>=90;                // only when the bubble can spare the strip
-      // grow the bubble if the rows need more room, but stop short of the next block
-      const want = rows.used + (foot?FOOT_H:0) + 6;
-      const bh = Math.min(Math.max(h, want), ceiling);
-      if(want>bh) return shell(`
-        <div style="position:absolute; top:2px; left:6px; right:2px; bottom:${foot?FOOT_H+2:2}px; overflow-y:auto; -webkit-overflow-scrolling:touch">
-          <div style="position:relative; height:${rows.used}px">${rows.html}</div></div>
-        ${foot?footStrip(b,st,clickable):""}`, "0", bh);
+    if(mt.rows){
       return shell(`
-        <div style="position:absolute; top:2px; left:6px; right:2px; bottom:2px">${rows.html}</div>
-        ${foot?footStrip(b,st,clickable):""}`, "0", bh);
+        <div style="position:absolute; top:2px; left:6px; right:2px; bottom:2px">${mt.rows.html}</div>
+        ${mt.foot?footStrip(b,st,clickable):""}`, "0");
     }
 
-    const roomForNote = realH>40;
+    const roomForNote = h>40;
     return shell(`
       <div style="display:flex; justify-content:space-between; gap:8px; align-items:baseline">
         <span style="font-size:13px; font-weight:700; color:var(--ink)">${esc(b.label||st.label)}${b.is_private?' <span style="font-size:9px;color:var(--faint)">PRIVATE</span>':''}</span>

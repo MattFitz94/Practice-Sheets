@@ -106,6 +106,19 @@
   .cell-in:focus{outline:none; border-color:var(--blood-2)}
   .cell-txt{width:100%; min-width:120px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--panel-2); color:var(--ink); font-size:13px}
   .cell-txt:focus{outline:none; border-color:var(--blood-2)}
+  /* note cell + expand button */
+  .notewrap{display:flex; align-items:stretch; gap:5px; min-width:140px}
+  .notewrap .cell-txt{min-width:0; flex:1}
+  .noteexp{flex-shrink:0; width:30px; border:1px solid var(--line); border-radius:6px; background:var(--panel-2);
+    color:var(--muted); font-size:13px; line-height:1; cursor:pointer; padding:0}
+  .noteexp:hover{color:var(--blood-2); border-color:var(--blood-2)}
+  .noteexp.hasnote{color:var(--blood-2); border-color:var(--blood)}
+  .noteread{display:block; text-align:left; min-width:110px; max-width:190px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .notearea{width:100%; box-sizing:border-box; min-height:180px; resize:vertical; padding:11px 12px;
+    border:1px solid var(--line); border-radius:8px; background:var(--panel-2); color:var(--ink);
+    font-size:15px; line-height:1.55; font-family:inherit}
+  .notearea:focus{outline:none; border-color:var(--blood-2)}
+  .notearea[readonly]{color:var(--muted)}
   .drillsel{width:100%; min-width:170px; padding:7px; border:1px solid var(--line); border-radius:6px; background:var(--panel-2); color:var(--ink); font-size:13px; font-weight:600}
   .drillsel:focus{outline:none; border-color:var(--blood-2)}
   .auto{display:block; padding:6px 4px; text-align:center; color:var(--muted); background:transparent; font-size:12px; white-space:nowrap}
@@ -545,6 +558,67 @@ async function loadDay(){
   }
 }
 
+/* ---------- note cells: inline preview + tap-to-expand ----------
+   The inline input stays for quick edits. The ⤢ button opens a full-size
+   textarea so long coach notes are readable and editable on a phone. */
+const NOTE_META = {
+  notes:           {title:"Notes",           hint:"Plan notes for this drill"},
+  completed_notes: {title:"Completed notes", hint:"How it actually went"}
+};
+function noteCell(i, field, value, placeholder, readOnly){
+  const v = value||"";
+  const meta = NOTE_META[field]||{title:"Note"};
+  const btn = `<button class="noteexp${v?" hasnote":""}" data-i="${i}" data-note="${field}"
+      title="Expand ${meta.title.toLowerCase()}">⤢</button>`;
+  const inner = readOnly
+    ? `<span class="auto noteread">${v?esc(v):"—"}</span>`
+    : `<input class="cell-txt" data-i="${i}" data-f="${field}" value="${esc(v)}" placeholder="${esc(placeholder)}">`;
+  return `<div class="notewrap">${inner}${btn}</div>`;
+}
+
+/* Full-screen note editor. Read-only for viewers, saves on Done otherwise. */
+function openNote(i, field, readOnly){
+  const r = gridRows[i]; if(!r) return;
+  const meta = NOTE_META[field]||{title:"Note", hint:""};
+  const d = r.drill_id?drillMap[r.drill_id]:null;
+  const wrap=document.createElement("div");
+  wrap.className="cmodal";
+  wrap.innerHTML=`
+    <div class="cbox">
+      <div class="chead">
+        <div><b>${esc(meta.title)}</b><div class="who">${esc(d?d.name:"Drill")} · ${activeDay}</div></div>
+        <button class="cx" id="nclose">×</button>
+      </div>
+      <div class="clist" style="padding:14px 16px">
+        <textarea class="notearea" id="nbody" ${readOnly?"readonly":""}
+          placeholder="${esc(meta.hint)}">${esc(r[field]||"")}</textarea>
+      </div>
+      ${readOnly?"":`<div class="cfoot" style="justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" id="ncancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="nsave">Done</button>
+      </div>`}
+    </div>`;
+  document.body.appendChild(wrap);
+  const ta=document.getElementById("nbody");
+  const close=()=>wrap.remove();
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  document.getElementById("nclose").onclick=close;
+  if(!readOnly){
+    document.getElementById("ncancel").onclick=close;
+    document.getElementById("nsave").onclick=()=>{
+      if(ta.value!==(r[field]||"")){ r[field]=ta.value; r._dirty=true; markDirty(); }
+      // patch the row in place so the sheet doesn't jump/scroll on close
+      const inp=document.querySelector(`#rows input.cell-txt[data-i="${i}"][data-f="${field}"]`);
+      if(inp) inp.value=r[field]||"";
+      const bt=document.querySelector(`#rows .noteexp[data-i="${i}"][data-note="${field}"]`);
+      if(bt) bt.classList.toggle("hasnote", !!r[field]);
+      close();
+    };
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+}
+
 function drawRows(drills){
   const tb=document.getElementById("rows"); if(!tb) return;
   const isPlayer = me.role==="player";
@@ -559,9 +633,8 @@ function drawRows(drills){
     const doneCell = isPlayer
       ? `<button class="statusbtn s-${st}" data-i="${i}" title="Click to change: pending → done → missed">${st==='done'?'✓':st==='missed'?'✗':'·'}</button>`
       : `<span class="statusflag s-${st}">${st==='done'?'✓':st==='missed'?'✗':'·'}</span>`;
-    const cnoteCell = isPlayer
-      ? `<input class="cell-txt" data-i="${i}" data-f="completed_notes" value="${esc(r.completed_notes)}" placeholder="how'd it go">`
-      : `<span class="auto" style="text-align:left; min-width:120px; display:block">${r.completed_notes?esc(r.completed_notes):'—'}</span>`;
+    const cnoteCell = noteCell(i, "completed_notes", r.completed_notes, "how'd it go", !isPlayer);
+    const noteCellHtml = noteCell(i, "notes", r.notes, "notes", isViewer);
     const tr=document.createElement("tr");
     tr.innerHTML=`
       <td>${isViewer?`<span style="font-size:14px">${d?esc(d.name):"—"}</span>`:`<select class="drillsel" data-i="${i}">${opts}</select>`}</td>
@@ -576,7 +649,7 @@ function drawRows(drills){
       <td><span class="auto" style="text-align:left; display:block; min-width:110px">${d&&d.goal?esc(d.goal):'—'}</span></td>
       <td style="text-align:center">${doneCell}</td>
       <td>${cnoteCell}</td>
-      <td>${isViewer?`<span class="auto" style="text-align:left;display:block">${r.notes?esc(r.notes):"—"}</span>`:`<input class="cell-txt" data-i="${i}" data-f="notes" value="${esc(r.notes)}" placeholder="notes">`}</td>
+      <td>${noteCellHtml}</td>
       <td style="text-align:center">${isViewer?"":`<button class="rowdel" data-i="${i}" title="Remove">×</button>`}<button class="cbtn" data-i="${i}" title="Comments">💬${r._ccount?`<b>${r._ccount}</b>`:""}</button></td>`;
     tb.appendChild(tr);
   });
@@ -608,6 +681,11 @@ function drawRows(drills){
     const i=+btn.dataset.i, row=gridRows[i];
     if(row.id){ await sb.from("sessions").delete().eq("id",row.id); }
     gridRows.splice(i,1); if(!gridRows.length)gridRows=[blankRow()]; drawRows(drills); totals();
+  });
+  tb.querySelectorAll(".noteexp").forEach(b=>b.onclick=()=>{
+    const f=b.dataset.note;
+    const ro = f==="completed_notes" ? !isPlayer : isViewer;
+    openNote(+b.dataset.i, f, ro);
   });
   tb.querySelectorAll(".cbtn").forEach(b=>b.onclick=()=>openComments(+b.dataset.i));
   totals();
@@ -881,7 +959,7 @@ function layoutDay(items, drills, dayStart){
     while(qi<queue.length){
       const d=queue[qi], mins=+d.minutes||0;
       if(until!=null && t+mins>until) break;
-      take.push(d); t+=mins; qi++;
+      take.push({...d, s:t, e:t+mins}); t+=mins; qi++;   // each drill carries its own start/finish
     }
     if(take.length){
       blocks.push({kind:"practice", label:"Practice", s:from, e:t, drills:take,
@@ -938,9 +1016,11 @@ function renderTimeline(layout, opts){
     const st=KIND_STYLE[b.kind]||KIND_STYLE.other;
     const top=y(b.s), realH=y(b.e)-y(b.s);
     const h=Math.max(realH,20);
-    const roomForDrills = realH>96;      // only list drills when the block is genuinely tall
-    const roomForNote   = realH>40;
+    const hasDrills   = !!(b.drills && b.drills.length);
+    const roomForNote = realH>40;
+    const roomForHint = realH>72 && hasDrills;
     const clickable = opts.linkPractice && b.kind==="practice";
+    // The bubble stays a summary — full drill detail is in the grouped list below.
     return `<div ${clickable?`data-jump="1"`:""} style="position:absolute; top:${top}px; height:${h}px; left:${LABEL_W+6}px; right:2px;
         background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:7px; padding:6px 10px; overflow:hidden; ${clickable?"cursor:pointer":""}">
       <div style="display:flex; justify-content:space-between; gap:8px; align-items:baseline">
@@ -948,8 +1028,7 @@ function renderTimeline(layout, opts){
         <span style="font-size:11px; color:${st.ac}; font-weight:700; white-space:nowrap">${m2t(b.s)}–${m2t(b.e)}</span>
       </div>
       ${roomForNote&&b.note?`<div style="font-size:10px; color:var(--muted); margin-top:1px">${esc(b.note)}</div>`:""}
-      ${roomForDrills&&b.drills?`<div style="font-size:11px; color:var(--muted); margin-top:5px; line-height:1.5">${b.drills.map(d=>esc(d.name)+" · "+(d.minutes||0)+"m").join("<br>")}</div>`:""}
-      ${clickable&&roomForDrills?`<div style="font-size:10px; color:${st.ac}; margin-top:5px">Open on the sheet →</div>`:""}
+      ${clickable&&roomForHint?`<div style="font-size:10px; color:${st.ac}; margin-top:5px">Open on the sheet →</div>`:""}
     </div>`;
   }).join("");
 
@@ -964,8 +1043,42 @@ function renderTimeline(layout, opts){
     <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:10px;border-radius:3px;border:1px dashed var(--line);display:inline-block"></i>Free</span>
   </div>`;
 
+  /* Grouped drill list — the readable view. Name top-left, its start–finish
+     underneath, category and duration on the right. */
+  const pBlocks = blocks.filter(b=>b.kind==="practice" && b.drills && b.drills.length);
+  const grouped = pBlocks.length ? `
+    <div style="margin-top:16px">
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint); margin-bottom:8px">Practice drills</div>
+      ${pBlocks.map(b=>{
+        const ac=KIND_STYLE.practice.ac;
+        const totals={};
+        b.drills.forEach(d=>{ const c=d.category||"Other"; totals[c]=(totals[c]||0)+(+d.minutes||0); });
+        return `<div style="background:var(--panel); border:1px solid var(--line); border-left:3px solid ${ac}; border-radius:8px; padding:10px 12px; margin-bottom:10px">
+          <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:6px">
+            <span style="font-size:13px; font-weight:800; color:var(--ink)">Practice</span>
+            <span style="font-size:11px; font-weight:700; color:${ac}; white-space:nowrap">${m2t(b.s)}–${m2t(b.e)} · ${durLabel(b.e-b.s)}</span>
+          </div>
+          ${b.drills.map(d=>`
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 0; border-top:1px solid var(--line)">
+              <div style="min-width:0">
+                <div style="font-size:13px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(d.name)}</div>
+                <div style="font-size:11px; font-weight:700; color:${ac}; margin-top:3px; white-space:nowrap">${m2t(d.s)}–${m2t(d.e)}</div>
+              </div>
+              <div style="flex-shrink:0; text-align:right">
+                ${d.category?`<span class="pill ${pillClass(d.category)}">${esc(d.category)}</span>`:""}
+                <div style="font-size:11px; color:var(--faint); margin-top:4px">${d.minutes||0}m</div>
+              </div>
+            </div>`).join("")}
+          <div style="display:flex; flex-wrap:wrap; gap:5px 12px; margin-top:8px; padding-top:7px; border-top:1px solid var(--line); font-size:11px; color:var(--muted)">
+            ${Object.keys(totals).map(c=>`<span>${esc(c)} · <b style="color:var(--ink)">${durLabel(totals[c])||"0m"}</b></span>`).join("")}
+          </div>
+        </div>`;
+      }).join("")}
+    </div>` : "";
+
   return warn+unplaced+legend+
-    `<div class="gridwrap" style="padding:10px 8px 10px 4px"><div style="position:relative; height:${totalH}px">${hours}${gapEls}${blockEls}</div></div>`;
+    `<div class="gridwrap" style="padding:10px 8px 10px 4px"><div style="position:relative; height:${totalH}px">${hours}${gapEls}${blockEls}</div></div>`+
+    grouped;
 }
 
 /* ============================================================
@@ -1030,7 +1143,7 @@ async function scheduleScreen(v){
     sb.from("schedule_items").select("*").eq("player_id",pid).eq("day",schedDay).order("start_time"),
     sb.from("sessions").select("minutes, sort, drills(name,category)").eq("player_id",pid).eq("logged_on",schedDay).order("sort")
   ]);
-  const drills=(sess||[]).filter(x=>x.drills).map(x=>({name:x.drills.name, minutes:+x.minutes||0}));
+  const drills=(sess||[]).filter(x=>x.drills).map(x=>({name:x.drills.name, category:x.drills.category, minutes:+x.minutes||0}));
   const dayStart = t2m((items||[]).find(i=>i.kind==="practice")?.start_time) ?? null;
   const layout = layoutDay(items||[], drills, dayStart);
 
@@ -1056,7 +1169,7 @@ async function scheduleScreen(v){
     downloadICS("schedule-"+schedDay+".ics", layout.blocks.map(b=>({
       date:schedDay, start:m2t(b.s), end:m2t(b.e),
       title:b.label||KIND_STYLE[b.kind].label,
-      desc:b.drills?b.drills.map(d=>d.name).join(", "):""
+      desc:b.drills?b.drills.map(d=>m2t(d.s)+"–"+m2t(d.e)+"  "+d.name).join("\n"):""
     })));
     flash("Calendar file downloaded");
   };

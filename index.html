@@ -1504,10 +1504,12 @@ async function buildScreen(v){
 
   const [{data:items},{data:sess},{data:templates}] = await Promise.all([
     sb.from("schedule_items").select("*").eq("player_id",me.id).eq("day",schedDay).order("start_time"),
-    sb.from("sessions").select("minutes, sort, status, completed, drills(name,default_minutes)").eq("player_id",me.id).eq("logged_on",schedDay).order("sort"),
+    sb.from("sessions").select("id, minutes, sort, status, completed, drills(name,category,default_minutes)").eq("player_id",me.id).eq("logged_on",schedDay).order("sort"),
     sb.from("day_templates").select("*").eq("player_id",me.id).order("sort")
   ]);
-  const drills=(sess||[]).filter(x=>x.drills).map(x=>({name:x.drills.name,minutes:sessionMins(x,schedDay)}));
+  const sessRows=(sess||[]).filter(x=>x.drills);            // the day's drills, in the order they're done
+  const drillsOf=rows=>rows.map(x=>({name:x.drills.name, category:x.drills.category, minutes:sessionMins(x,schedDay)}));
+  const drills=drillsOf(sessRows);
   const totalPractice=drills.reduce((a,d)=>a+d.minutes,0);
   const practiceRow=(items||[]).find(i=>i.kind==="practice");
   const anchors=(items||[]).filter(i=>i.kind!=="practice").sort((a,b)=>t2m(a.start_time)-t2m(b.start_time));
@@ -1539,7 +1541,11 @@ async function buildScreen(v){
     <div class="sec-h"><h2>Fixed items</h2></div>
     <div class="card" id="blist"></div>
 
-    <!-- 3. TEMPLATES (bottom) -->
+    <!-- 3. PRACTICE ORDER -->
+    <div class="sec-h"><h2>Practice order</h2></div>
+    <div class="card" id="porder"></div>
+
+    <!-- 4. TEMPLATES (bottom) -->
     <div class="sec-h"><h2>Templates</h2></div>
     <div class="card">
       ${(templates||[]).length? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:${(items||[]).length?"10px":"0"}">
@@ -1590,6 +1596,60 @@ async function buildScreen(v){
   };
 
   renderBuildList();
+  renderOrder();
+
+  /* ---- Practice order ----
+     The drills run back-to-back in `sort` order, so moving one up or down is
+     what changes the times. The times shown here are the real ones: they come
+     from the same layout the Schedule tab draws, fixed items and all. */
+  function renderOrder(){
+    const box=document.getElementById("porder");
+    if(!sessRows.length){
+      box.innerHTML=`<div class="empty" style="border:0; padding:14px">No drills on this day yet. Add them on the <b>Day Plan</b> first.</div>`;
+      return;
+    }
+    const lay=layoutDay(items||[], drillsOf(sessRows), t2m(practiceRow?.start_time) ?? null);
+    const placed=[];
+    lay.blocks.forEach(b=>{ if(b.kind==="practice" && b.drills) b.drills.forEach(d=>placed.push(d)); });
+
+    const rows=sessRows.map((r,i)=>{
+      const p=placed[i], cat=r.drills.category;
+      const mins=sessionMins(r,schedDay);
+      return `<div class="row-item" style="gap:8px">
+        <span class="who" style="flex:0 0 18px; font-size:11px; text-align:right">${i+1}</span>
+        <div class="name" style="min-width:0">${esc(r.drills.name)}
+          <small>${p?`${m2t(p.s)} – ${m2t(p.e)} · `:""}${durLabel(mins)||"0m"}</small></div>
+        ${cat?`<span class="pill ${pillClass(cat)}" style="flex:0 0 auto">${esc(cat)}</span>`:""}
+        <span style="flex:0 0 auto; display:flex; gap:4px">
+          <button class="btn btn-ghost btn-sm omv" data-i="${i}" data-d="-1" ${i===0?"disabled style=\"opacity:.3\"":""}>↑</button>
+          <button class="btn btn-ghost btn-sm omv" data-i="${i}" data-d="1" ${i===sessRows.length-1?"disabled style=\"opacity:.3\"":""}>↓</button>
+        </span>
+      </div>`;
+    }).join("");
+
+    box.innerHTML = rows +
+      `<p class="who" style="margin:10px 0 0">Moving a drill re-times everything after it. The Day Plan follows the same order.</p>`;
+
+    box.querySelectorAll(".omv").forEach(b=>b.onclick=async()=>{
+      const i=+b.dataset.i, j=i+(+b.dataset.d);
+      if(j<0 || j>=sessRows.length) return;
+      const tmp=sessRows[i]; sessRows[i]=sessRows[j]; sessRows[j]=tmp;
+      renderOrder();                                   // show the new times straight away
+      const ok=await saveOrder();
+      if(ok) flash("Order updated");
+    });
+  }
+
+  async function saveOrder(){
+    for(let i=0;i<sessRows.length;i++){
+      const r=sessRows[i];
+      if(r.sort===i) continue;
+      const {error}=await sb.from("sessions").update({sort:i}).eq("id",r.id);
+      if(error){ flash("Couldn't save order: "+error.message); keepScroll(()=>buildScreen(v)); return false; }
+      r.sort=i;
+    }
+    return true;
+  }
 
   function renderBuildList(){
     const box=document.getElementById("blist");

@@ -1352,33 +1352,60 @@ function downloadICS(filename, events){
 }
 
 /* ---- export a day as an image (for sending to the team) ----
-   Drawn straight onto a canvas — no libraries, works offline, and the result is
-   a plain PNG the phone can share like a photo. */
+   A drawn copy of the Schedule tab: same true-to-time timeline, hour lines,
+   free gaps, uniform-width blocks and drill rows inside practice. Straight onto
+   a canvas — no libraries, works offline, and the result is a plain PNG the
+   phone can share like a photo. */
 function exportDayImage(lay, dayISO, playerName){
-  const W=860, PAD=30, SCALE=2, TIME_W=132;
-  const nice=new Date(dayISO+"T00:00:00").toLocaleDateString(undefined,
-    {weekday:"long", day:"numeric", month:"long", year:"numeric"});
+  const W=820, PAD=24, SCALE=2, GUT=48;
+  const X0=PAD+GUT, X1=W-PAD, COLW=X1-X0;      // every block is this same width
+  const PXPM=1.05, ROW_H=36, HEAD=132, FOOT=42;
 
-  const rows=[];
-  (lay.blocks||[]).forEach(b=>{
+  const blocks=(lay.blocks||[]).slice().sort((a,b)=>a.s-b.s);
+  const coaches=(lay.coaches||[]);
+  const minS=Math.min.apply(null, blocks.map(b=>b.s));
+  const maxE=Math.max.apply(null, blocks.map(b=>b.e));
+  const START=Math.max(0, Math.floor((minS-20)/60)*60);
+  const END=Math.min(24*60, Math.ceil((maxE+20)/60)*60);
+
+  /* measure: a block is never shorter than its duration, and never shorter than
+     the rows it has to hold. Rows sit on their own time span inside the block,
+     exactly as they do on the Schedule tab. */
+  const rowsOf=b=>{
+    let cursor=26; const out=[];
+    b.drills.forEach(d=>{
+      const top=Math.max((d.s-b.s)*PXPM+26, cursor);
+      const h=Math.max((d.e-d.s)*PXPM-6, ROW_H-6);
+      out.push({d, top, h});
+      cursor=top+h+6;
+    });
+    return {out, used:cursor+6};
+  };
+  const meta=blocks.map(b=>{
     const st=KIND_STYLE[b.kind]||KIND_STYLE.other;
-    if(b.kind==="practice" && b.drills && b.drills.length){
-      rows.push({h:46, ac:st.ac, title:"Practice", time:m2t(b.s)+" – "+m2t(b.e),
-        note:b.drills.length+" drill"+(b.drills.length>1?"s":"")+" · "+durLabel(b.e-b.s)});
-      b.drills.forEach(d=>{
-        const cs=(lay.coaches||[]).filter(c=>c.s<d.e && c.e>d.s).map(c=>c.label||"Coach").join(" · ");
-        rows.push({h:36, ac:st.ac, sub:true, title:d.name, time:m2t(d.s)+" – "+m2t(d.e),
-          note:[d.category||"", cs?("with "+cs):""].filter(Boolean).join(" · ")});
-      });
-    } else {
-      rows.push({h:46, ac:st.ac, title:b.label||st.label, time:m2t(b.s)+" – "+m2t(b.e),
-        note:durLabel(b.e-b.s)});
-    }
-    rows.push({h:10, gap:true});
+    const isP=b.kind==="practice" && b.drills && b.drills.length;
+    const rows=isP ? rowsOf(b) : null;
+    const need=isP ? rows.used : 50;
+    return {b, st, isP, rows, h:Math.max((b.e-b.s)*PXPM, need)};
   });
+  const pts=[[START,0]];
+  let cy=0, prev=START;
+  meta.forEach(m=>{
+    cy+=Math.max(0, m.b.s-prev)*PXPM; pts.push([m.b.s,cy]);
+    cy+=m.h;                          pts.push([Math.max(m.b.e,m.b.s+1),cy]);
+    prev=Math.max(prev, m.b.e);
+  });
+  cy+=Math.max(0, END-prev)*PXPM; pts.push([END,cy]);
+  const bodyH=cy, H=HEAD+bodyH+FOOT;
+  const yOf=m=>{
+    if(m<=pts[0][0]) return pts[0][1];
+    for(let i=1;i<pts.length;i++){
+      const a=pts[i-1], b=pts[i];
+      if(m<=b[0]) return b[0]===a[0] ? b[1] : a[1]+(m-a[0])/(b[0]-a[0])*(b[1]-a[1]);
+    }
+    return bodyH;
+  };
 
-  const HEAD=118, FOOT=46;
-  const H=HEAD+rows.reduce((a,r)=>a+r.h,0)+FOOT;
   const cv=document.createElement("canvas");
   cv.width=W*SCALE; cv.height=H*SCALE;
   const g=cv.getContext("2d");
@@ -1390,38 +1417,103 @@ function exportDayImage(lay, dayISO, playerName){
     while(t.length>1 && g.measureText(t+"…").width>maxW) t=t.slice(0,-1);
     return t+"…";
   };
+  const rr=(x,y,w,h,r)=>{
+    const k=Math.min(r, w/2, h/2);
+    g.beginPath();
+    g.moveTo(x+k,y); g.lineTo(x+w-k,y); g.quadraticCurveTo(x+w,y,x+w,y+k);
+    g.lineTo(x+w,y+h-k); g.quadraticCurveTo(x+w,y+h,x+w-k,y+h);
+    g.lineTo(x+k,y+h); g.quadraticCurveTo(x,y+h,x,y+h-k);
+    g.lineTo(x,y+k); g.quadraticCurveTo(x,y,x+k,y); g.closePath();
+  };
 
+  // ---- background + header ----
   g.fillStyle="#141920"; g.fillRect(0,0,W,H);
+  const nice=new Date(dayISO+"T00:00:00").toLocaleDateString(undefined,
+    {weekday:"long", day:"numeric", month:"long", year:"numeric"});
   g.fillStyle="#c3f53c"; g.fillRect(PAD,PAD,48,5);
-  g.fillStyle="#8b97a3"; g.font=F(700,12); g.fillText("PRACTICE SCHEDULE", PAD, PAD+30);
-  g.fillStyle="#eef2f0"; g.font=F(800,26); g.fillText(fit(nice, W-PAD*2), PAD, PAD+64);
-  if(playerName){ g.fillStyle="#8b97a3"; g.font=F(600,14); g.fillText(fit(playerName, W-PAD*2), PAD, PAD+88); }
+  g.font=F(700,12); g.fillStyle="#8b97a3"; g.fillText("PRACTICE SCHEDULE", PAD, PAD+30);
+  g.font=F(800,26); g.fillStyle="#eef2f0"; g.fillText(fit(nice, COLW), PAD, PAD+64);
+  if(playerName){ g.font=F(600,14); g.fillStyle="#8b97a3"; g.fillText(fit(playerName, COLW), PAD, PAD+88); }
   g.strokeStyle="#333c46"; g.lineWidth=1;
-  g.beginPath(); g.moveTo(PAD, HEAD-12); g.lineTo(W-PAD, HEAD-12); g.stroke();
+  g.beginPath(); g.moveTo(PAD, HEAD-16); g.lineTo(W-PAD, HEAD-16); g.stroke();
 
-  let y=HEAD;
-  rows.forEach(r=>{
-    if(r.gap){ y+=r.h; return; }
-    const x=PAD+(r.sub?26:0), h=r.h-4;
-    g.fillStyle=r.sub?"#1b2027":"#232a33";
-    g.fillRect(x, y, W-PAD-x, h);
-    g.fillStyle=r.ac; g.fillRect(x, y, 4, h);
-    g.font=F(700, r.sub?13:14); g.fillStyle=r.ac;
-    g.fillText(r.time, x+16, y+(r.sub?23:22));
-    g.font=F(r.sub?600:800, r.sub?14:16); g.fillStyle="#eef2f0";
-    const tx=x+16+TIME_W;
-    g.fillText(fit(r.title, W-PAD-tx-12), tx, y+(r.sub?23:21));
-    if(r.note && !r.sub){ g.font=F(600,11); g.fillStyle="#8b97a3"; g.fillText(fit(r.note, W-PAD-tx-12), tx, y+36); }
-    if(r.note && r.sub){
-      g.font=F(600,11); g.fillStyle="#8b97a3";
-      const nw=g.measureText(r.note).width;
-      g.fillText(r.note, Math.max(tx+10, W-PAD-12-nw), y+23);
-    }
-    y+=r.h;
+  const Y=m=>HEAD+yOf(m);
+
+  // ---- hour lines ----
+  for(let h=Math.ceil(START/60); h<=Math.floor(END/60); h++){
+    const ty=Y(h*60);
+    g.font=F(600,11); g.fillStyle="#5b6672"; g.textAlign="right";
+    g.fillText(String(h).padStart(2,"0")+":00", PAD+GUT-10, ty+4);
+    g.textAlign="left";
+    g.strokeStyle="#242c35"; g.lineWidth=1;
+    g.beginPath(); g.moveTo(X0, ty+.5); g.lineTo(X1, ty+.5); g.stroke();
+  }
+
+  // ---- free gaps ----
+  (lay.gaps||[]).forEach(gp=>{
+    const ty=Y(gp.s), hh=Math.max(Y(gp.e)-ty, 18);
+    g.strokeStyle="#333c46"; g.lineWidth=1;
+    if(g.setLineDash) g.setLineDash([5,4]);
+    rr(X0, ty, COLW, hh, 6); g.stroke();
+    if(g.setLineDash) g.setLineDash([]);
+    g.font=F(600,11); g.fillStyle="#5b6672"; g.textAlign="center";
+    g.fillText("FREE · "+durLabel(gp.e-gp.s), X0+COLW/2, ty+hh/2+4);
+    g.textAlign="left";
   });
-  g.font=F(600,11); g.fillStyle="#5b6672";
-  g.fillText("Practice Schedule · "+dayISO, PAD, H-PAD+6);
 
+  // ---- blocks ----
+  meta.forEach(m=>{
+    const b=m.b, st=m.st, ty=Y(b.s), hh=m.h;
+    g.fillStyle=st.bg; rr(X0, ty, COLW, hh, 7); g.fill();
+    g.fillStyle=st.ac; rr(X0, ty, 4, hh, 2); g.fill();
+
+    if(m.isP){
+      g.font=F(700,11); g.fillStyle="#8b97a3";
+      g.fillText("PRACTICE · "+b.drills.length+" drill"+(b.drills.length>1?"s":"")+" · "+durLabel(b.e-b.s), X0+16, ty+18);
+      g.textAlign="right"; g.fillStyle=st.ac; g.font=F(700,11);
+      g.fillText(m2t(b.s)+" – "+m2t(b.e), X1-14, ty+18);
+      g.textAlign="left";
+      let ry=ty+26;
+      m.rows.out.forEach(r=>{
+        const d=r.d, rh=r.h;
+        ry=ty+r.top;
+        g.fillStyle="rgba(0,0,0,.24)"; rr(X0+12, ry, COLW-24, rh, 6); g.fill();
+        g.fillStyle=st.ac; g.fillRect(X0+12, ry+4, 2, Math.max(4,rh-8));
+        g.font=F(700,11); g.fillStyle=st.ac;
+        g.fillText(m2t(d.s)+" – "+m2t(d.e), X0+24, ry+rh/2+4);
+        const nx=X0+24+96;
+        const cs=coaches.filter(c=>c.s<d.e && c.e>d.s).map(c=>c.label||"Coach").join(" · ");
+        // right-hand side: category, then coach name to its left
+        let right=X1-24;
+        if(d.category){
+          g.font=F(700,10); g.fillStyle="#8b97a3";
+          const cw=g.measureText(d.category.toUpperCase()).width;
+          g.textAlign="right"; g.fillText(d.category.toUpperCase(), right, ry+rh/2+4); g.textAlign="left";
+          right-=cw+14;
+        }
+        if(cs){
+          g.font=F(700,10); g.fillStyle="#e79bc0";
+          const ww=Math.min(g.measureText(cs.toUpperCase()).width, 190);
+          g.textAlign="right"; g.fillText(fit(cs.toUpperCase(), 190), right, ry+rh/2+4); g.textAlign="left";
+          right-=ww+14;
+        }
+        g.font=F(600,13); g.fillStyle="#eef2f0";
+        g.fillText(fit(d.name, Math.max(60, right-nx-8)), nx, ry+rh/2+4);
+      });
+    } else {
+      g.font=F(800,15); g.fillStyle="#eef2f0";
+      g.fillText(fit((b.label||st.label)+(b.is_private?"  (private)":""), COLW-150), X0+16, ty+24);
+      g.font=F(700,12); g.fillStyle=st.ac; g.textAlign="right";
+      g.fillText(m2t(b.s)+" – "+m2t(b.e), X1-14, ty+24); g.textAlign="left";
+      g.font=F(600,11); g.fillStyle="#8b97a3";
+      g.fillText(st.label.toUpperCase()+" · "+durLabel(b.e-b.s), X0+16, ty+40);
+    }
+  });
+
+  g.font=F(600,11); g.fillStyle="#5b6672";
+  g.fillText("Practice Schedule · "+dayISO, PAD, H-PAD+4);
+
+  // ---- show it ----
   const url=cv.toDataURL("image/png");
   let shareFile=null;
   try{ cv.toBlob(b=>{ if(b) shareFile=new File([b], "schedule-"+dayISO+".png", {type:"image/png"}); }, "image/png"); }catch(e){}
@@ -1618,16 +1710,9 @@ async function buildScreen(v){
   // coach bookings are MEANT to sit on top of practice, so they never count as a clash
   const hardAnchors=anchors.filter(i=>i.kind!=="coach");
 
-  /* Quick adds: one-tap fixed items. The four built-ins always exist; anything
-     you save yourself is stored per player and shown alongside them. Saved ones
-     are single-item rows in day_templates (the old whole-day templates are gone,
-     and a legacy multi-item row simply adds all of its items). */
-  const BUILTIN_QA=[
-    {name:"Gym 1h",     kind:"gym",    label:"Gym",    duration_mins:60},
-    {name:"Gym 30m",    kind:"gym",    label:"Gym",    duration_mins:30},
-    {name:"Travel 1h",  kind:"travel", label:"Travel", duration_mins:60},
-    {name:"Media 30m",  kind:"media",  label:"Media",  duration_mins:30}
-  ];
+  /* Quick adds: one-tap fixed items, all of them your own. Build an item in the
+     add row (or open one you've already made) and tap ★ Save to keep it. They're
+     stored per player as single-item rows in day_templates. */
   const savedQA=(presetRows||[]).filter(t=>Array.isArray(t.items) && t.items.length);
   let qaEdit=false;
 
@@ -1813,6 +1898,21 @@ async function buildScreen(v){
     return true;
   }
 
+  /* Keep a fixed item as a one-tap quick add. Called from the add row and from
+     the edit box, so anything you've already built can be kept without redoing it. */
+  async function saveQuickAdd(item){
+    const len=+item.duration_mins||30;
+    const label=item.label || (KIND_STYLE[item.kind]||KIND_STYLE.other).label;
+    const name=prompt("Name this quick add:", `${label} ${durLabel(len)}`);
+    if(!name) return;
+    const {error}=await sb.from("day_templates").insert({
+      player_id:me.id, name, practice_start:null, sort:savedQA.length,
+      items:[{kind:item.kind||"other", label, duration_mins:len, is_private:!!item.is_private}]
+    });
+    if(error){ flash(error.message); return; }
+    flash(`Saved "${name}"`); keepScroll(()=>buildScreen(v));
+  }
+
   function renderBuildList(){
     const box=document.getElementById("blist");
     // whatever you last set stays put; otherwise start at the end of the last fixed item
@@ -1825,15 +1925,14 @@ async function buildScreen(v){
       }
     }
 
-    // one-tap fixed items — they drop in at the time showing in the add row
+    // your saved one-tap items — they drop in at the time showing in the add row
     const qaChips = `
       <div style="margin-bottom:12px">
-        <span class="who" id="qa-when" style="display:block; margin-bottom:6px">Quick add · drops in at ${defTime}</span>
-        <div style="display:flex; gap:6px; flex-wrap:wrap">
-          ${BUILTIN_QA.map((q,i)=>`<button class="btn btn-ghost btn-sm qab" data-i="${i}">${esc(q.name)}</button>`).join("")}
+        <span class="who" id="qa-when" style="display:block; margin-bottom:6px">${savedQA.length?`Quick add · drops in at ${defTime}`:"Quick add"}</span>
+        ${savedQA.length?`<div style="display:flex; gap:6px; flex-wrap:wrap">
           ${savedQA.map(q=>`<button class="btn btn-ghost btn-sm qas" data-id="${q.id}">${esc(q.name)}${qaEdit?` <span class="qadel" data-id="${q.id}" style="color:#e0574f; font-weight:800; padding-left:4px">×</span>`:""}</button>`).join("")}
-          ${savedQA.length?`<button class="btn btn-ghost btn-sm" id="qaedit" style="opacity:.65">${qaEdit?"Done":"Edit"}</button>`:""}
-        </div>
+          <button class="btn btn-ghost btn-sm" id="qaedit" style="opacity:.65">${qaEdit?"Done":"Edit"}</button>
+        </div>`:`<p class="who" style="margin:0; text-transform:none; letter-spacing:0">Nothing saved yet. Set an item up below — or tap one you've already added — and use <b>★ Save</b>.</p>`}
       </div>`;
 
     // the day, in time order, each row editable inline
@@ -1880,7 +1979,7 @@ async function buildScreen(v){
     ["a-time","a-mins","a-kind"].forEach(id=>{ const el=document.getElementById(id); if(el) el.onchange=()=>{
       remember(); syncKind();
       const qw=document.getElementById("qa-when");
-      if(qw) qw.textContent="Quick add · drops in at "+val("a-time");
+      if(qw && savedQA.length) qw.textContent="Quick add · drops in at "+val("a-time");
     }; });
     syncKind();
 
@@ -1914,7 +2013,6 @@ async function buildScreen(v){
       if(error){ flash(error.message); return; }
       flash("Added"); keepScroll(()=>buildScreen(v));
     };
-    box.querySelectorAll(".qab").forEach(b=>b.onclick=()=>addQuick([BUILTIN_QA[+b.dataset.i]]));
     box.querySelectorAll(".qas").forEach(b=>b.onclick=async(e)=>{
       if(e.target.closest(".qadel")) return;
       const q=savedQA.find(x=>String(x.id)===b.dataset.id);
@@ -1930,19 +2028,15 @@ async function buildScreen(v){
     const qe=document.getElementById("qaedit");
     if(qe) qe.onclick=()=>{ qaEdit=!qaEdit; renderBuildList(); };
 
-    document.getElementById("a-qa").onclick=async()=>{
+    document.getElementById("a-qa").onclick=()=>{
       remember();
       const kv=parseKindValue(val("a-kind"));
-      const label=kv.label || val("a-label") || KIND_STYLE[kv.kind].label;
-      const len=+val("a-mins")||30;
-      const name=prompt("Name this quick add:", `${label} ${durLabel(len)}`);
-      if(!name) return;
-      const {error}=await sb.from("day_templates").insert({
-        player_id:me.id, name, practice_start:null, sort:savedQA.length,
-        items:[{kind:kv.kind, label, duration_mins:len, is_private:document.getElementById("a-priv").checked}]
+      saveQuickAdd({
+        kind:kv.kind,
+        label:kv.label || val("a-label") || KIND_STYLE[kv.kind].label,
+        duration_mins:+val("a-mins")||30,
+        is_private:document.getElementById("a-priv").checked
       });
-      if(error){ flash(error.message); return; }
-      flash(`Saved "${name}"`); keepScroll(()=>buildScreen(v));
     };
 
     box.querySelectorAll(".rowdel").forEach(b=>b.onclick=async(e)=>{
@@ -1982,6 +2076,7 @@ async function buildScreen(v){
       </div>
       <div class="cfoot">
         <button class="btn btn-ghost btn-sm" id="ei-cancel">Cancel</button>
+        <button class="btn btn-ghost btn-sm" id="ei-qa">★ Save as quick add</button>
         <button class="btn btn-primary btn-sm" id="ei-save" style="margin-left:auto">Save changes</button>
       </div></div>`;
     document.body.appendChild(wrap);
@@ -1997,6 +2092,17 @@ async function buildScreen(v){
     };
     document.getElementById("ei-kind").onchange=eiSync;
     eiSync();
+    document.getElementById("ei-qa").onclick=()=>{
+      const kv=parseKindValue(val("ei-kind"));
+      const preset={
+        kind:kv.kind,
+        label:kv.label || val("ei-label") || (KIND_STYLE[kv.kind]||KIND_STYLE.other).label,
+        duration_mins:+val("ei-mins")||45,
+        is_private:!!document.getElementById("ei-priv")?.checked
+      };
+      close();
+      saveQuickAdd(preset);
+    };
     document.getElementById("ei-save").onclick=async()=>{
       const kv=parseKindValue(val("ei-kind"));
       const st2=t2m(val("ei-time")), len=+val("ei-mins")||0;

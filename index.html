@@ -147,8 +147,9 @@
   .p-Putting{background:#1c3a2e; color:#6fd8ab}
   .p-sg{background:#3d2a1a; color:#e0a26f}
   .p-Performance{background:#2a2740; color:#a9a4e8}
-  .p-Technical,.p-Practice,.p--{background:#2a323b; color:#98a4b0}
-  .p-oncourse{background:#2a323b; color:#98a4b0}
+  .p-Technical{background:#1b3733; color:#6ec9c0}
+  .p-Practice,.p--{background:#2a323b; color:#98a4b0}
+  .p-oncourse{background:#3a3320; color:#dcc463}
   .statusbtn{width:30px; height:30px; border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--faint); font-size:15px; font-weight:800; line-height:1; cursor:pointer}
   .statusbtn.s-done{background:var(--blood-2); color:var(--lime-ink); border-color:var(--blood-2)}
   .statusbtn.s-missed{background:#3d2a1a; color:#e0864f; border-color:#7a4a33}
@@ -366,6 +367,17 @@ function flash(m){ const f=document.getElementById("flash"); f.textContent=m; f.
 function val(id){ return document.getElementById(id)?.value?.trim() || ""; }
 function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
 function pillClass(c){ if(c==="Short Game")return "p-sg"; if(c==="Practice On Course")return "p-oncourse"; return "p-"+(c||"-"); }
+/* The same category colours the CSS pills use, in a form canvas can draw with. */
+const CAT_COLOUR={
+  "p-Driving":     {bg:"#3b4a1c", ink:"#c3f53c"},
+  "p-Approach":    {bg:"#1e3340", ink:"#7fc4dd"},
+  "p-Putting":     {bg:"#1c3a2e", ink:"#6fd8ab"},
+  "p-sg":          {bg:"#3d2a1a", ink:"#e0a26f"},
+  "p-Performance": {bg:"#2a2740", ink:"#a9a4e8"},
+  "p-oncourse":    {bg:"#3a3320", ink:"#dcc463"},
+  "p-Technical":   {bg:"#1b3733", ink:"#6ec9c0"}
+};
+function catColour(c){ return CAT_COLOUR[pillClass(c)] || {bg:"#2a323b", ink:"#98a4b0"}; }
 
 /* ============================================================
    2. AUTH
@@ -1483,20 +1495,23 @@ function exportDayImage(lay, dayISO, playerName){
         g.fillText(m2t(d.s)+" – "+m2t(d.e), X0+24, ry+rh/2+4);
         const nx=X0+24+96;
         const cs=coaches.filter(c=>c.s<d.e && c.e>d.s).map(c=>c.label||"Coach").join(" · ");
-        // right-hand side: category, then coach name to its left
-        let right=X1-24;
+        // right-hand side: the category pill in its own colour, coach name to its left
+        let right=X1-22;
+        const pill=(label, bg, ink, maxW)=>{
+          g.font=F(700,10);
+          const txt=fit(label, maxW||220);
+          const pw=g.measureText(txt).width+18, ph=19, px=right-pw, py=ry+rh/2-ph/2;
+          g.fillStyle=bg; rr(px, py, pw, ph, 9.5); g.fill();
+          g.fillStyle=ink; g.textAlign="center";
+          g.fillText(txt, px+pw/2, py+ph/2+3.5);
+          g.textAlign="left";
+          right-=pw+8;
+        };
         if(d.category){
-          g.font=F(700,10); g.fillStyle="#8b97a3";
-          const cw=g.measureText(d.category.toUpperCase()).width;
-          g.textAlign="right"; g.fillText(d.category.toUpperCase(), right, ry+rh/2+4); g.textAlign="left";
-          right-=cw+14;
+          const cc=catColour(d.category);
+          pill(d.category.toUpperCase(), cc.bg, cc.ink, 190);
         }
-        if(cs){
-          g.font=F(700,10); g.fillStyle="#e79bc0";
-          const ww=Math.min(g.measureText(cs.toUpperCase()).width, 190);
-          g.textAlign="right"; g.fillText(fit(cs.toUpperCase(), 190), right, ry+rh/2+4); g.textAlign="left";
-          right-=ww+14;
-        }
+        if(cs) pill(cs.toUpperCase(), "rgba(231,155,192,.16)", "#e79bc0", 190);
         g.font=F(600,13); g.fillStyle="#eef2f0";
         g.fillText(fit(d.name, Math.max(60, right-nx-8)), nx, ry+rh/2+4);
       });

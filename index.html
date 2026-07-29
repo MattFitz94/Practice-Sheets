@@ -122,6 +122,13 @@
   .drillsel{width:100%; min-width:170px; padding:7px; border:1px solid var(--line); border-radius:6px; background:var(--panel-2); color:var(--ink); font-size:13px; font-weight:600}
   .drillsel:focus{outline:none; border-color:var(--blood-2)}
   .auto{display:block; padding:6px 4px; text-align:center; color:var(--muted); background:transparent; font-size:12px; white-space:nowrap}
+  /* Goal is a long pass-criteria sentence. Left to itself it stretches the whole
+     day grid sideways, so it's held to one short line and opens on tap. */
+  .gcell{display:block; max-width:84px; padding:6px 4px; text-align:left; color:var(--muted); font-size:12px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .gcell.tap{cursor:pointer; border-bottom:1px dotted var(--line)}
+  .gcell.open{max-width:240px; white-space:normal; color:var(--ink); border-bottom:0}
+  th.gtog{cursor:pointer; user-select:none}
   .pill{font-size:10px; padding:3px 9px; border-radius:999px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap}
   .p-Driving{background:#3b4a1c; color:#c3f53c}
   .p-Approach{background:#1e3340; color:#7fc4dd}
@@ -272,6 +279,7 @@ async function refreshDrills(force){
   drillMap={}; (data||[]).forEach(d=>drillMap[d.id]=d);
 }
 let gridRows = [];          // working copy of the day's rows
+let goalsOpen = false;      // Goal column: one short line, or opened out
 
 /* Keep the page where it was across a re-render.
    Views are async — content lands after the promise resolves and after
@@ -291,6 +299,55 @@ function keepScroll(fn){
   };
   if(r && typeof r.then==="function"){ r.then(finish, finish); } else { finish(); }
   return r;
+}
+
+/* WHERE YOU WERE.
+   iOS Safari freezes or throws the page away when you switch apps, and the auth
+   library also fires a token refresh on the way back in. Either one used to land
+   you at the top of the Day Plan. The tab, the day and the scroll position are
+   parked in storage and put back when you return — but only for 6 hours, so
+   coming back tomorrow starts clean. */
+const VIEW_KEY="ps.view";
+const VIEW_TTL=6*60*60*1000;
+let _restoreY=null;
+function saveView(){
+  try{
+    if(!currentTab) return;
+    localStorage.setItem(VIEW_KEY, JSON.stringify({
+      tab: currentTab,
+      day: typeof activeDay!=="undefined" ? activeDay : null,
+      sched: typeof schedDay!=="undefined" ? schedDay : null,
+      week: typeof weekStart!=="undefined" ? weekStart : null,
+      tabX: _tabScrollX||0,
+      y: window.scrollY || document.documentElement.scrollTop || 0,
+      t: Date.now()
+    }));
+  }catch(e){}
+}
+function loadView(){
+  try{
+    const v=JSON.parse(localStorage.getItem(VIEW_KEY)||"null");
+    if(!v || !v.t || Date.now()-v.t > VIEW_TTL) return null;
+    return v;
+  }catch(e){ return null; }
+}
+/* Content arrives after the data does, so the page isn't tall enough to scroll
+   to straight away. Keep asking until it is, and stand down the moment the
+   user touches the screen. */
+function restoreScroll(y){
+  if(!(y>0)) return;
+  let n=0, hits=0, stop=false;
+  const cancel=()=>{ stop=true; };
+  ["touchstart","wheel","keydown"].forEach(ev=>window.addEventListener(ev,cancel,{passive:true, once:true}));
+  const tick=()=>{
+    if(stop) return;
+    const max=Math.max(0, document.documentElement.scrollHeight-window.innerHeight);
+    const target=Math.min(y,max);
+    window.scrollTo(0,target);
+    hits = Math.abs((window.scrollY||0)-target)<2 ? hits+1 : 0;
+    if(hits<3 && ++n<34) setTimeout(tick,60);
+  };
+  tick();
 }
 
 function flash(m){ const f=document.getElementById("flash"); f.textContent=m; f.classList.add("show"); setTimeout(()=>f.classList.remove("show"),1700); }
@@ -365,7 +422,15 @@ async function boot(){
   }
   shell();
 }
-sb.auth.onAuthStateChange(()=>boot());
+/* Supabase refreshes the token when you come back to the app. Rebuilding the
+   whole shell for that wiped the screen and lost your place — so only re-boot
+   when who is signed in has actually changed. */
+sb.auth.onAuthStateChange((event, session)=>{
+  const uid = session?.user?.id || null;
+  if(event==="TOKEN_REFRESHED" || event==="USER_UPDATED") return;
+  if(me && uid && uid===me.id) return;
+  boot();
+});
 
 /* ============================================================
    4. SHELL + TABS
@@ -378,7 +443,18 @@ function shell(){
     : me.role==="viewer"
     ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["technical","Technical"],["progress","Progress"]]
     : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build Day"],["library","Drills"],["technical","Technical"],["season","Season"],["results","Results"],["team",pendingCount?`Team (${pendingCount})`:"Team"],["progress","Progress"]];
-  if(!currentTab) currentTab=tabs[0][0];
+  if(!currentTab){
+    const sv=loadView();
+    if(sv && tabs.some(t=>t[0]===sv.tab)){
+      currentTab=sv.tab;
+      if(sv.day) activeDay=sv.day;
+      if(sv.sched) schedDay=sv.sched;
+      if(sv.week) weekStart=sv.week;
+      if(sv.tabX) _tabScrollX=sv.tabX;
+      _restoreY=sv.y||0;
+    }
+    if(!currentTab) currentTab=tabs[0][0];
+  }
   app.innerHTML=`
     <div class="stickytop">
       <header><div class="wrap">
@@ -402,8 +478,10 @@ function shell(){
     _tabScrollX = n?n.scrollLeft:0;
     currentTab=b.dataset.tab;
     keepScroll(()=>shell());
+    saveView();
   });
   renderTab();
+  if(_restoreY!=null){ const y=_restoreY; _restoreY=null; restoreScroll(y); }
 }
 function renderTab(){
   const v=document.getElementById("tabview");
@@ -476,7 +554,8 @@ async function dayScreen(v){
       <table class="grid">
         <thead><tr>
           <th class="l">Drill</th><th>Club(s)</th><th>Category</th><th>Time</th><th>Balls</th>
-          <th>Dist</th><th>Ment</th><th>Phys</th><th>Why</th><th>Goal</th>
+          <th>Dist</th><th>Ment</th><th>Phys</th><th>Why</th>
+          <th class="gtog" id="goalhead" title="Tap to open every goal">${goalsOpen?"Goal ⌃":"Goal ⌄"}</th>
           <th>Done</th><th>Completed notes</th><th>Notes</th><th></th>
         </tr></thead>
         <tbody id="rows"></tbody>
@@ -505,6 +584,12 @@ async function dayScreen(v){
   document.getElementById("dprev").onclick=()=>shiftDay(-1);
   document.getElementById("dnext").onclick=()=>shiftDay(1);
   document.getElementById("dtoday").onclick=()=>{ activeDay=todayISO(); keepScroll(()=>dayScreen(v)); };
+  const ghead=document.getElementById("goalhead");
+  if(ghead) ghead.onclick=()=>{
+    goalsOpen=!goalsOpen;
+    ghead.textContent = goalsOpen ? "Goal ⌃" : "Goal ⌄";
+    document.querySelectorAll("#rows .gcell.tap").forEach(g=>g.classList.toggle("open", goalsOpen));
+  };
   const arow=document.getElementById("addrow"); if(arow) arow.onclick=()=>{ gridRows.push(blankRow()); drawRows(drills); };
   const sgrid=document.getElementById("savegrid"); if(sgrid) sgrid.onclick=saveDay;
   const cday=document.getElementById("clearday");
@@ -660,13 +745,18 @@ function drawRows(drills){
       <td style="text-align:center">${isViewer?`<span class="auto">${r.mental===""?"—":esc(r.mental)}</span>`:`<input class="cell-in" data-i="${i}" data-f="mental" value="${esc(r.mental)}">`}</td>
       <td style="text-align:center">${isViewer?`<span class="auto">${r.physical===""?"—":esc(r.physical)}</span>`:`<input class="cell-in" data-i="${i}" data-f="physical" value="${esc(r.physical)}">`}</td>
       <td><span class="auto">${d&&d.why?esc(d.why):'—'}</span></td>
-      <td><span class="auto" style="text-align:left; display:block; min-width:110px">${d&&d.goal?esc(d.goal):'—'}</span></td>
+      <td>${(d&&d.goal)
+        ? `<span class="gcell tap${goalsOpen?" open":""}" data-i="${i}" title="${esc(d.goal)}">${esc(d.goal)}</span>`
+        : `<span class="gcell">—</span>`}</td>
       <td style="text-align:center">${doneCell}</td>
       <td>${cnoteCell}</td>
       <td>${noteCellHtml}</td>
       <td style="text-align:center">${isViewer?"":`<button class="rowdel" data-i="${i}" title="Remove">×</button>`}<button class="cbtn" data-i="${i}" title="Comments">💬${r._ccount?`<b>${r._ccount}</b>`:""}</button></td>`;
     tb.appendChild(tr);
   });
+
+  // tap one goal to read it in full, tap again to fold it back
+  tb.querySelectorAll(".gcell.tap").forEach(g=>g.onclick=()=>g.classList.toggle("open"));
 
   // drill select => VLOOKUP fill
   tb.querySelectorAll(".drillsel").forEach(s=>s.onchange=()=>{
@@ -951,8 +1041,36 @@ const KIND_STYLE = {
   media:   {bg:"rgba(169,164,232,.12)", ac:"#a9a4e8", label:"Media"},
   travel:  {bg:"rgba(127,196,221,.12)", ac:"#7fc4dd", label:"Travel"},
   gym:     {bg:"rgba(195,245,60,.10)",  ac:"#c3f53c", label:"Gym"},
-  other:   {bg:"rgba(224,162,111,.12)", ac:"#e0a26f", label:"Other"}
+  other:   {bg:"rgba(224,162,111,.12)", ac:"#e0a26f", label:"Other"},
+  coach:   {bg:"rgba(231,155,192,.12)", ac:"#e79bc0", label:"Coach"}
 };
+
+/* Coaches sit ON TOP of practice rather than pushing it around: booking Phil for
+   14:00–15:00 doesn't move a single drill, it just marks the drills that fall in
+   that window with his name so the team can see time is booked with him. */
+const COACHES = [
+  {key:"phil", label:"Phil Putting"},
+  {key:"mark", label:"Mark Tee to Green"}
+];
+function coachKeyFor(label){
+  const l=String(label||"").toLowerCase();
+  const c=COACHES.find(c=>l.indexOf(c.key)>=0);
+  return c ? c.key : COACHES[0].key;
+}
+function itemKindValue(it){ return it.kind==="coach" ? "coach:"+coachKeyFor(it.label) : it.kind; }
+function kindSelectOptions(sel){
+  const base=["media","travel","gym","other"].map(k=>`<option value="${k}" ${k===sel?"selected":""}>${KIND_STYLE[k].label}</option>`);
+  const co=COACHES.map(c=>`<option value="coach:${c.key}" ${("coach:"+c.key)===sel?"selected":""}>Coach · ${c.label}</option>`);
+  return base.concat(co).join("");
+}
+function parseKindValue(v){
+  const s=String(v||"");
+  if(s.indexOf("coach:")===0){
+    const c=COACHES.find(x=>x.key===s.split(":")[1])||COACHES[0];
+    return {kind:"coach", label:c.label};
+  }
+  return {kind:s, label:null};
+}
 function t2m(t){ if(!t) return null; const p=String(t).split(":"); return (+p[0])*60+(+p[1]||0); }
 function m2t(m){ m=Math.round(m); return String(Math.floor(m/60)%24).padStart(2,"0")+":"+String(Math.round(m)%60).padStart(2,"0"); }
 function durLabel(m){ if(!m) return ""; const h=Math.floor(m/60), r=m%60; return (h?h+"h":"")+(r?(h?" ":"")+r+"m":""); }
@@ -975,7 +1093,13 @@ function sessionMins(row, dayISO){
 
 /* Lay out a day. Returns {blocks, gaps, overlaps} */
 function layoutDay(items, drills, dayStart){
-  const anchors = items.filter(i=>i.kind!=="practice")
+  /* Coach bookings overlay practice — they never displace it, so they are held
+     back from the anchor list and returned separately. */
+  const coaches = items.filter(i=>i.kind==="coach")
+    .map(i=>({...i, s:t2m(i.start_time), e:t2m(i.start_time)+(i.duration_mins||0)}))
+    .filter(i=>i.s!=null).sort((a,b)=>a.s-b.s);
+
+  const anchors = items.filter(i=>i.kind!=="practice" && i.kind!=="coach")
     .map(i=>({...i, s:t2m(i.start_time), e:t2m(i.start_time)+(i.duration_mins||0)}))
     .filter(i=>i.s!=null).sort((a,b)=>a.s-b.s);
 
@@ -1021,13 +1145,30 @@ function layoutDay(items, drills, dayStart){
   });
   if(qi<queue.length) cursor = pushPractice(cursor, null);
 
+  /* A coach booking normally shows as a name on the drills it covers. If it covers
+     no drill at all it would be invisible, so it gets drawn as its own block. */
+  const drillSpans=[];
+  blocks.forEach(b=>{ if(b.drills) b.drills.forEach(d=>drillSpans.push(d)); });
+  coaches.forEach(c=>{
+    c.covers = drillSpans.filter(d=>c.s < d.e && c.e > d.s).length;
+    if(!c.covers) blocks.push({...c, note:durLabel(c.e-c.s)});
+  });
+
   blocks.sort((a,b)=>a.s-b.s);
-  return {blocks, gaps, overlaps, unplaced: queue.length-qi};
+  return {blocks, gaps, overlaps, coaches, unplaced: queue.length-qi};
 }
 
 /* The timeline itself */
 function renderTimeline(layout, opts){
   const {blocks, gaps, overlaps} = layout;
+  const coaches = layout.coaches || [];
+  const coachesOn = d => coaches.filter(c=>c.s < d.e && c.e > d.s);   // booked while this drill runs
+  const coachTag = list => list.length ? `<div style="flex:0 1 auto; min-width:0; align-self:center; display:flex; flex-direction:column; gap:3px; align-items:center">
+      ${list.map(c=>`<span style="max-width:118px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+        font-size:10.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+        color:${KIND_STYLE.coach.ac}; background:rgba(231,155,192,.14);
+        border:1px solid rgba(231,155,192,.38); border-radius:999px; padding:3px 9px">${esc(c.label||"Coach")}</span>`).join("")}
+    </div>` : "";
   const START=DAY_START_MIN, END=DAY_END_MIN;
   const PXPM=1.6;                  // pixels per minute — roomy, since the day scrolls anyway
   const LABEL_W=46;
@@ -1042,14 +1183,16 @@ function renderTimeline(layout, opts){
   </div>`;
   const MIN_ROW = 54;                        // a row never gets smaller than its own text
   // rough line count for the drill name — the pill takes the right half, so ~24 chars fit
-  const rowNeed = name => 37 + 17*Math.min(3, Math.max(1, Math.ceil((name||"").length/24)));
+  const rowNeed = (name, coachCount) => 37 + 17*Math.min(3, Math.max(1, Math.ceil((name||"").length/(coachCount?16:24))))
+                                          + (coachCount>1 ? 20*(coachCount-1) : 0);
   /* Rows sit on their time span, but never below MIN_ROW. If a short drill needs more
      room than its slice, the rows after it shift down rather than being squashed. */
   const drillRows = (b, st) => {
     let cursor=0, html="";
     b.drills.forEach(d=>{
+      const cs=coachesOn(d);
       const rowTop=Math.max((d.s-b.s)*PXPM, cursor);
-      const rowH=Math.max((d.e-d.s)*PXPM-4, MIN_ROW, rowNeed(d.name));
+      const rowH=Math.max((d.e-d.s)*PXPM-4, MIN_ROW, rowNeed(d.name, cs.length));
       cursor=rowTop+rowH+4;
       html+=`<div style="position:absolute; top:${rowTop}px; height:${rowH}px; left:0; right:0; box-sizing:border-box;
         background:rgba(0,0,0,.22); border-left:2px solid ${st.ac}; border-radius:6px;
@@ -1059,6 +1202,7 @@ function renderTimeline(layout, opts){
         <div style="font-size:13px; font-weight:600; color:var(--ink); line-height:1.3">${esc(d.name)}</div>
         <div style="font-size:11px; font-weight:700; color:${st.ac}; margin-top:4px; white-space:nowrap">${m2t(d.s)}–${m2t(d.e)}</div>
       </div>
+      ${coachTag(cs)}
       ${d.category?`<div style="flex-shrink:0; text-align:right">
         <span class="pill ${pillClass(d.category)}">${esc(d.category)}</span>
         <div style="font-size:11px; color:var(--faint); margin-top:4px">${d.minutes||0}m</div>
@@ -1256,11 +1400,16 @@ async function scheduleScreen(v){
   document.getElementById("sweek").onclick=()=>scheduleWeek(v);
   document.getElementById("sexport").onclick=()=>{
     if(!layout.blocks.length){ flash("Nothing to export"); return; }
-    downloadICS("schedule-"+schedDay+".ics", layout.blocks.map(b=>({
+    const evs=layout.blocks.map(b=>({
       date:schedDay, start:m2t(b.s), end:m2t(b.e),
       title:b.label||KIND_STYLE[b.kind].label,
       desc:b.drills?b.drills.map(d=>m2t(d.s)+"–"+m2t(d.e)+"  "+d.name).join("\n"):""
-    })));
+    }));
+    // coaches overlay practice, so they aren't blocks — export them in their own right
+    (layout.coaches||[]).filter(c=>c.covers).forEach(c=>evs.push({
+      date:schedDay, start:m2t(c.s), end:m2t(c.e), title:c.label||"Coach", desc:"Booked with coach"
+    }));
+    downloadICS("schedule-"+schedDay+".ics", evs);
     flash("Calendar file downloaded");
   };
 
@@ -1314,10 +1463,17 @@ async function scheduleWeek(v){
       return `<div title="${esc(b.label||st.label)} ${m2t(b.s)}–${m2t(b.e)}" style="position:absolute; top:${top}px; height:${h}px; left:2px; right:2px; background:${st.bg}; border-left:3px solid ${st.ac}; border-radius:5px; overflow:hidden; padding:2px 4px">
         ${h>26?`<div style="font-size:9px; color:var(--ink); font-weight:600; line-height:1.2">${esc((b.label||st.label).slice(0,18))}</div><div style="font-size:8px;color:var(--muted)">${m2t(b.s)}</div>`:""}</div>`;
     }).join("");
+    // coach bookings sit on top of whatever is underneath them
+    const co=(lay.coaches||[]).map(c=>{
+      const top=(c.s-DAY_START_MIN)/span*PX, h=Math.max((c.e-c.s)/span*PX,8);
+      return `<div title="${esc(c.label||"Coach")} ${m2t(c.s)}–${m2t(c.e)}" style="position:absolute; top:${top}px; height:${h}px; left:2px; right:2px;
+        border:1px solid ${KIND_STYLE.coach.ac}; background:rgba(231,155,192,.16); border-radius:5px; overflow:hidden; padding:1px 4px">
+        ${h>16?`<div style="font-size:9px; font-weight:700; color:${KIND_STYLE.coach.ac}; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${esc((c.label||"Coach"))}</div>`:""}</div>`;
+    }).join("");
     return `<div style="flex:1; min-width:104px">
       <div style="padding:6px; text-align:center; background:${isToday?'var(--blood-2)':'var(--panel-2)'}; color:${isToday?'var(--lime-ink)':'var(--ink)'}; border-radius:7px 7px 0 0; font-size:11px; font-weight:800; text-transform:uppercase">
         ${d.toLocaleDateString(undefined,{weekday:'short'})}<div style="font-size:10px; opacity:.75; font-weight:600">${d.getDate()}/${d.getMonth()+1}</div></div>
-      <div style="position:relative; height:${PX}px; background:var(--panel); border:1px solid var(--line); border-top:0; border-radius:0 0 7px 7px">${bl}</div>
+      <div style="position:relative; height:${PX}px; background:var(--panel); border:1px solid var(--line); border-top:0; border-radius:0 0 7px 7px">${bl}${co}</div>
     </div>`;
   }).join("");
 
@@ -1343,6 +1499,8 @@ async function buildScreen(v){
   const totalPractice=drills.reduce((a,d)=>a+d.minutes,0);
   const practiceRow=(items||[]).find(i=>i.kind==="practice");
   const anchors=(items||[]).filter(i=>i.kind!=="practice").sort((a,b)=>t2m(a.start_time)-t2m(b.start_time));
+  // coach bookings are MEANT to sit on top of practice, so they never count as a clash
+  const hardAnchors=anchors.filter(i=>i.kind!=="coach");
 
   v.innerHTML=`
     <div class="daybar">
@@ -1440,7 +1598,7 @@ async function buildScreen(v){
       return `<div class="row-item" data-edit="${it.id}" style="border-left:3px solid ${st.ac}; padding-left:10px; cursor:pointer">
         <span class="pill" style="background:${st.bg}; color:${st.ac}">${st.label}</span>
         <div class="name">${esc(it.label||st.label)}
-          <small>${it.start_time||"—"}${end?" – "+end:""} · ${durLabel(it.duration_mins||0)}${it.is_private?" · private":""}</small></div>
+          <small>${it.start_time||"—"}${end?" – "+end:""} · ${durLabel(it.duration_mins||0)}${it.kind==="coach"?" · over practice":""}${it.is_private?" · private":""}</small></div>
         <span class="who" style="font-size:11px; flex:0 0 auto">Edit</span>
         <button class="rowdel" data-id="${it.id}" title="Remove" style="font-size:20px; padding:0 8px">×</button>
       </div>`;
@@ -1451,30 +1609,42 @@ async function buildScreen(v){
       <div style="display:flex; gap:6px; align-items:center; padding:10px; background:var(--panel-2);
            border:1px dashed var(--blood-2); border-radius:9px; margin-top:10px; flex-wrap:wrap">
         <span style="font-size:20px; color:var(--blood-2); font-weight:700; line-height:1">+</span>
-        <select id="a-kind" style="flex:1; min-width:88px">
-          ${["media","travel","gym","other"].map(k=>`<option value="${k}" ${k===buildDraft.kind?"selected":""}>${KIND_STYLE[k].label}</option>`).join("")}</select>
+        <select id="a-kind" style="flex:1; min-width:88px">${kindSelectOptions(buildDraft.kind)}</select>
         <select id="a-time" style="flex:1; min-width:78px">${timeOptions(defTime)}</select>
         <select id="a-mins" style="flex:1; min-width:70px">${minsOptions(buildDraft.mins)}</select>
         <input id="a-label" placeholder="Label" style="flex:2; min-width:110px">
         <label class="inline" style="font-size:12px; color:var(--muted); flex:0 0 auto"><input type="checkbox" id="a-priv" style="width:auto"> Private</label>
         <button class="btn btn-primary btn-sm" id="a-add" style="flex:0 0 auto">Add</button>
+        <p class="who" id="a-hint" style="margin:0; flex:1 0 100%"></p>
       </div>`;
 
     box.innerHTML = dayRows + addRow;
 
     // hold on to the add-row settings so switching tabs or days doesn't reset them
     const remember=()=>{ buildDraft.time=val("a-time"); buildDraft.mins=+val("a-mins")||45; buildDraft.kind=val("a-kind"); };
-    ["a-time","a-mins","a-kind"].forEach(id=>{ const el=document.getElementById(id); if(el) el.onchange=remember; });
+    // a coach booking names itself, so the free-text label steps aside
+    const syncKind=()=>{
+      const kv=parseKindValue(val("a-kind")), lab=document.getElementById("a-label"), hint=document.getElementById("a-hint");
+      if(!lab) return;
+      lab.disabled = kv.kind==="coach";
+      lab.value = kv.kind==="coach" ? kv.label : "";
+      lab.style.opacity = kv.kind==="coach" ? ".55" : "1";
+      if(hint) hint.textContent = kv.kind==="coach" ? "Sits on top of practice — nothing moves, the drills in this window just show the name." : "";
+    };
+    ["a-time","a-mins","a-kind"].forEach(id=>{ const el=document.getElementById(id); if(el) el.onchange=()=>{ remember(); syncKind(); }; });
+    syncKind();
 
     document.getElementById("a-add").onclick=async()=>{
       remember();
-      const kind=val("a-kind"), st2=t2m(val("a-time")), len=+val("a-mins")||0;
-      const clash=anchors.filter(i=>i.start_time)
+      const kv=parseKindValue(val("a-kind")), kind=kv.kind;
+      const st2=t2m(val("a-time")), len=+val("a-mins")||0;
+      const clash = kind==="coach" ? null : hardAnchors.filter(i=>i.start_time)
         .find(i=>{ const s2=t2m(i.start_time), e2=s2+(i.duration_mins||0); return st2 < e2 && (st2+len) > s2; });
       if(clash && !confirm(`This overlaps "${clash.label||clash.kind}" at ${clash.start_time}. Add anyway?`)) return;
       const {error}=await sb.from("schedule_items").insert({
         player_id:me.id, day:schedDay, start_time:val("a-time"), duration_mins:len,
-        kind, label:val("a-label")||null, is_private:document.getElementById("a-priv").checked, is_anchor:true });
+        kind, label:kv.label || val("a-label") || null,
+        is_private:document.getElementById("a-priv").checked, is_anchor:kind!=="coach" });
       if(error){ flash(error.message); return; }
       flash("Added"); keepScroll(()=>buildScreen(v));
     };
@@ -1504,7 +1674,7 @@ async function buildScreen(v){
         <button class="cx" id="eix">×</button></div>
       <div class="clist" style="padding:14px 16px">
         <div class="field"><label class="mini">Type</label>
-          <select id="ei-kind">${["media","travel","gym","other"].map(k=>`<option value="${k}" ${k===it.kind?"selected":""}>${KIND_STYLE[k].label}</option>`).join("")}</select></div>
+          <select id="ei-kind">${kindSelectOptions(itemKindValue(it))}</select></div>
         <div class="grid2">
           <div><label class="mini">Start</label><select id="ei-time">${timeOptions(it.start_time||"09:00")}</select></div>
           <div><label class="mini">Length</label><select id="ei-mins">${minsOptions(it.duration_mins||45)}</select></div>
@@ -1523,14 +1693,24 @@ async function buildScreen(v){
     wrap.onclick=e=>{ if(e.target===wrap) close(); };
     document.getElementById("eix").onclick=close;
     document.getElementById("ei-cancel").onclick=close;
+    const eiSync=()=>{
+      const kv=parseKindValue(val("ei-kind")), lab=document.getElementById("ei-label");
+      lab.disabled = kv.kind==="coach";
+      lab.style.opacity = kv.kind==="coach" ? ".55" : "1";
+      if(kv.kind==="coach") lab.value=kv.label;
+    };
+    document.getElementById("ei-kind").onchange=eiSync;
+    eiSync();
     document.getElementById("ei-save").onclick=async()=>{
+      const kv=parseKindValue(val("ei-kind"));
       const st2=t2m(val("ei-time")), len=+val("ei-mins")||0;
-      const clash=anchors.filter(i=>String(i.id)!==String(it.id) && i.start_time)
+      const clash = kv.kind==="coach" ? null : hardAnchors.filter(i=>String(i.id)!==String(it.id) && i.start_time)
         .find(i=>{ const s2=t2m(i.start_time), e2=s2+(i.duration_mins||0); return st2 < e2 && (st2+len) > s2; });
       if(clash && !confirm(`This overlaps "${clash.label||clash.kind}" at ${clash.start_time}. Save anyway?`)) return;
       const {error}=await sb.from("schedule_items").update({
-        kind:val("ei-kind"), start_time:val("ei-time"), duration_mins:len,
-        label:val("ei-label")||null, is_private:document.getElementById("ei-priv").checked
+        kind:kv.kind, start_time:val("ei-time"), duration_mins:len,
+        label:kv.label || val("ei-label") || null,
+        is_private:document.getElementById("ei-priv").checked, is_anchor:kv.kind!=="coach"
       }).eq("id", it.id);
       if(error){ flash(error.message); return; }
       flash("Updated"); close(); keepScroll(()=>buildScreen(v));
@@ -2968,9 +3148,23 @@ function flushDaySave(){
     }
   }catch(e){}
 }
-document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flushDaySave(); });
-window.addEventListener("pagehide", flushDaySave);
+/* Put you back where you were if Safari dumped you at the top. If you were
+   already at the top, nothing happens. */
+function resumeView(){
+  const sv=loadView();
+  if(!sv || !(sv.y>0)) return;
+  if((window.scrollY || document.documentElement.scrollTop || 0) <= 1) restoreScroll(sv.y);
+}
+let _viewTimer=null;
+window.addEventListener("scroll",()=>{ clearTimeout(_viewTimer); _viewTimer=setTimeout(saveView,350); },{passive:true});
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="hidden"){ flushDaySave(); saveView(); }
+  else setTimeout(resumeView,80);
+});
+window.addEventListener("pagehide",()=>{ flushDaySave(); saveView(); });
+window.addEventListener("pageshow",()=>setTimeout(resumeView,80));
 window.addEventListener("blur", flushDaySave);
+if(history.scrollRestoration) history.scrollRestoration="manual";
 
 boot();
 </script>

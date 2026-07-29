@@ -672,13 +672,23 @@ function drawRows(drills){
   tb.querySelectorAll(".drillsel").forEach(s=>s.onchange=()=>{
     const i=+s.dataset.i, id=s.value, d=drillMap[id];
     const r=gridRows[i];
+    const prev = r.drill_id ? drillMap[r.drill_id] : null;   // drill this row held a moment ago
     r.drill_id=id; r._dirty=true;
     if(d){
-      if(r.minutes===""||r.minutes==null) r.minutes = d.default_minutes ?? "";
-      if(r.balls===""||r.balls==null)     r.balls   = d.default_balls ?? "";
-      if(r.mental===""||r.mental==null)   r.mental  = d.default_mental ?? "";
-      if(r.physical===""||r.physical==null) r.physical = d.default_physical ?? "";
-      if(!r.distance) r.distance = d.distance ?? "";
+      // Take the NEW drill's numbers unless this row carries a genuine typed
+      // override. A value that merely equals the OLD drill's default is not an
+      // override — leaving it behind is what made a re-ordered day keep the
+      // previous drill's durations on the Schedule timeline.
+      const take=(field, dField)=>{
+        const own=r[field];
+        const untouched = own===""||own==null || (prev && prev[dField]!=null && +own===+prev[dField]);
+        if(untouched) r[field] = d[dField] ?? "";
+      };
+      take("minutes","default_minutes");
+      take("balls","default_balls");
+      take("mental","default_mental");
+      take("physical","default_physical");
+      if(!r.distance || (prev && r.distance===prev.distance)) r.distance = d.distance ?? "";
     }
     drawRows(drills); markDirty();
   });
@@ -947,6 +957,22 @@ function t2m(t){ if(!t) return null; const p=String(t).split(":"); return (+p[0]
 function m2t(m){ m=Math.round(m); return String(Math.floor(m/60)%24).padStart(2,"0")+":"+String(Math.round(m)%60).padStart(2,"0"); }
 function durLabel(m){ if(!m) return ""; const h=Math.floor(m/60), r=m%60; return (h?h+"h":"")+(r?(h?" ":"")+r+"m":""); }
 
+/* Minutes to USE for a session row when laying out a timeline.
+   This must mirror shownVal() on Day Plan, or the Schedule shows different
+   durations from the plan it is drawing: a planned row (today-or-later and not
+   done) takes the drill's CURRENT default; past/done rows keep what was logged.
+   Expects the row to have been selected with drills(default_minutes) joined. */
+function sessionMins(row, dayISO){
+  const d = row.drills || null;
+  const done = row.status==="done" || row.completed===true;
+  const past = dayISO < todayISO();
+  const planned = !done && !past;
+  const own = row.minutes;
+  const blank = own==null || own==="";
+  if(d && (planned || blank) && d.default_minutes!=null) return +d.default_minutes||0;
+  return blank ? 0 : (+own||0);
+}
+
 /* Lay out a day. Returns {blocks, gaps, overlaps} */
 function layoutDay(items, drills, dayStart){
   const anchors = items.filter(i=>i.kind!=="practice")
@@ -1205,9 +1231,9 @@ async function scheduleScreen(v){
 
   const [{data:items},{data:sess}] = await Promise.all([
     sb.from("schedule_items").select("*").eq("player_id",pid).eq("day",schedDay).order("start_time"),
-    sb.from("sessions").select("minutes, sort, drills(name,category)").eq("player_id",pid).eq("logged_on",schedDay).order("sort")
+    sb.from("sessions").select("minutes, sort, status, completed, drills(name,category,default_minutes)").eq("player_id",pid).eq("logged_on",schedDay).order("sort")
   ]);
-  const drills=(sess||[]).filter(x=>x.drills).map(x=>({name:x.drills.name, category:x.drills.category, minutes:+x.minutes||0}));
+  const drills=(sess||[]).filter(x=>x.drills).map(x=>({name:x.drills.name, category:x.drills.category, minutes:sessionMins(x,schedDay)}));
   const dayStart = t2m((items||[]).find(i=>i.kind==="practice")?.start_time) ?? null;
   const layout = layoutDay(items||[], drills, dayStart);
 
@@ -1271,13 +1297,13 @@ async function scheduleWeek(v){
 
   const [{data:allItems},{data:allSess}] = await Promise.all([
     sb.from("schedule_items").select("*").eq("player_id",pid).gte("day",days[0]).lte("day",days[6]),
-    sb.from("sessions").select("minutes, sort, logged_on, drills(name)").eq("player_id",pid).gte("logged_on",days[0]).lte("logged_on",days[6]).order("sort")
+    sb.from("sessions").select("minutes, sort, logged_on, status, completed, drills(name,default_minutes)").eq("player_id",pid).gte("logged_on",days[0]).lte("logged_on",days[6]).order("sort")
   ]);
 
   const span=DAY_END_MIN-DAY_START_MIN, PX=380;
   const cols=days.map(dt=>{
     const items=(allItems||[]).filter(i=>i.day===dt);
-    const drills=(allSess||[]).filter(x=>x.logged_on===dt&&x.drills).map(x=>({name:x.drills.name,minutes:+x.minutes||0}));
+    const drills=(allSess||[]).filter(x=>x.logged_on===dt&&x.drills).map(x=>({name:x.drills.name,minutes:sessionMins(x,dt)}));
     const ds=t2m(items.find(i=>i.kind==="practice")?.start_time) ?? null;
     const lay=layoutDay(items,drills,ds);
     const isToday=dt===todayISO();
@@ -1310,10 +1336,10 @@ async function buildScreen(v){
 
   const [{data:items},{data:sess},{data:templates}] = await Promise.all([
     sb.from("schedule_items").select("*").eq("player_id",me.id).eq("day",schedDay).order("start_time"),
-    sb.from("sessions").select("minutes, sort, drills(name)").eq("player_id",me.id).eq("logged_on",schedDay).order("sort"),
+    sb.from("sessions").select("minutes, sort, status, completed, drills(name,default_minutes)").eq("player_id",me.id).eq("logged_on",schedDay).order("sort"),
     sb.from("day_templates").select("*").eq("player_id",me.id).order("sort")
   ]);
-  const drills=(sess||[]).filter(x=>x.drills).map(x=>({name:x.drills.name,minutes:+x.minutes||0}));
+  const drills=(sess||[]).filter(x=>x.drills).map(x=>({name:x.drills.name,minutes:sessionMins(x,schedDay)}));
   const totalPractice=drills.reduce((a,d)=>a+d.minutes,0);
   const practiceRow=(items||[]).find(i=>i.kind==="practice");
   const anchors=(items||[]).filter(i=>i.kind!=="practice").sort((a,b)=>t2m(a.start_time)-t2m(b.start_time));

@@ -454,7 +454,7 @@ function shell(){
     ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["players","Players"],["library","Drills"],["technical","Technical"],["progress","Progress"]]
     : me.role==="viewer"
     ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["technical","Technical"],["progress","Progress"]]
-    : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build Day"],["library","Drills"],["technical","Technical"],["season","Season"],["results","Results"],["team",pendingCount?`Team (${pendingCount})`:"Team"],["progress","Progress"]];
+    : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build a day"],["library","Drills"],["technical","Technical"],["season","Season"],["results","Results"],["team",pendingCount?`Team (${pendingCount})`:"Team"],["progress","Progress"]];
   if(!currentTab){
     const sv=loadView();
     if(sv && tabs.some(t=>t[0]===sv.tab)){
@@ -1152,7 +1152,7 @@ function layoutDay(items, drills, dayStart){
       if(a.s - cursor >= 20) gaps.push({s:cursor, e:a.s});
       else if(cursor===before && a.s-before>=20) gaps.push({s:before, e:a.s});
     }
-    blocks.push({...a, note:durLabel(a.e-a.s)});
+    blocks.push({...a, freeFrom:cursor, note:durLabel(a.e-a.s)});
     cursor = Math.max(cursor, a.e);
   });
   if(qi<queue.length) cursor = pushPractice(cursor, null);
@@ -1319,7 +1319,7 @@ function renderTimeline(layout, opts){
    9. DAY SCHEDULE — yours to edit, team can view (bar private)
    ============================================================ */
 let schedDay = todayISO();
-let buildDraft = {time:null, mins:45, kind:"media"};   // sticky add-row settings on Build Day
+let buildDraft = {time:null, mins:45, kind:"media"};   // sticky add-row settings on Build a day
 
 /* ---- export a day (or the season) to calendar ---- */
 function icsEscape(t){ return String(t||"").replace(/[\\;,]/g,m=>"\\"+m).replace(/\n/g,"\\n"); }
@@ -1349,6 +1349,108 @@ function downloadICS(filename, events){
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob); a.download=filename; a.click();
   URL.revokeObjectURL(a.href);
+}
+
+/* ---- export a day as an image (for sending to the team) ----
+   Drawn straight onto a canvas — no libraries, works offline, and the result is
+   a plain PNG the phone can share like a photo. */
+function exportDayImage(lay, dayISO, playerName){
+  const W=860, PAD=30, SCALE=2, TIME_W=132;
+  const nice=new Date(dayISO+"T00:00:00").toLocaleDateString(undefined,
+    {weekday:"long", day:"numeric", month:"long", year:"numeric"});
+
+  const rows=[];
+  (lay.blocks||[]).forEach(b=>{
+    const st=KIND_STYLE[b.kind]||KIND_STYLE.other;
+    if(b.kind==="practice" && b.drills && b.drills.length){
+      rows.push({h:46, ac:st.ac, title:"Practice", time:m2t(b.s)+" – "+m2t(b.e),
+        note:b.drills.length+" drill"+(b.drills.length>1?"s":"")+" · "+durLabel(b.e-b.s)});
+      b.drills.forEach(d=>{
+        const cs=(lay.coaches||[]).filter(c=>c.s<d.e && c.e>d.s).map(c=>c.label||"Coach").join(" · ");
+        rows.push({h:36, ac:st.ac, sub:true, title:d.name, time:m2t(d.s)+" – "+m2t(d.e),
+          note:[d.category||"", cs?("with "+cs):""].filter(Boolean).join(" · ")});
+      });
+    } else {
+      rows.push({h:46, ac:st.ac, title:b.label||st.label, time:m2t(b.s)+" – "+m2t(b.e),
+        note:durLabel(b.e-b.s)});
+    }
+    rows.push({h:10, gap:true});
+  });
+
+  const HEAD=118, FOOT=46;
+  const H=HEAD+rows.reduce((a,r)=>a+r.h,0)+FOOT;
+  const cv=document.createElement("canvas");
+  cv.width=W*SCALE; cv.height=H*SCALE;
+  const g=cv.getContext("2d");
+  g.scale(SCALE,SCALE);
+  const F=(w,s)=>w+" "+s+'px -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif';
+  const fit=(txt,maxW)=>{
+    let t=String(txt||"");
+    if(g.measureText(t).width<=maxW) return t;
+    while(t.length>1 && g.measureText(t+"…").width>maxW) t=t.slice(0,-1);
+    return t+"…";
+  };
+
+  g.fillStyle="#141920"; g.fillRect(0,0,W,H);
+  g.fillStyle="#c3f53c"; g.fillRect(PAD,PAD,48,5);
+  g.fillStyle="#8b97a3"; g.font=F(700,12); g.fillText("PRACTICE SCHEDULE", PAD, PAD+30);
+  g.fillStyle="#eef2f0"; g.font=F(800,26); g.fillText(fit(nice, W-PAD*2), PAD, PAD+64);
+  if(playerName){ g.fillStyle="#8b97a3"; g.font=F(600,14); g.fillText(fit(playerName, W-PAD*2), PAD, PAD+88); }
+  g.strokeStyle="#333c46"; g.lineWidth=1;
+  g.beginPath(); g.moveTo(PAD, HEAD-12); g.lineTo(W-PAD, HEAD-12); g.stroke();
+
+  let y=HEAD;
+  rows.forEach(r=>{
+    if(r.gap){ y+=r.h; return; }
+    const x=PAD+(r.sub?26:0), h=r.h-4;
+    g.fillStyle=r.sub?"#1b2027":"#232a33";
+    g.fillRect(x, y, W-PAD-x, h);
+    g.fillStyle=r.ac; g.fillRect(x, y, 4, h);
+    g.font=F(700, r.sub?13:14); g.fillStyle=r.ac;
+    g.fillText(r.time, x+16, y+(r.sub?23:22));
+    g.font=F(r.sub?600:800, r.sub?14:16); g.fillStyle="#eef2f0";
+    const tx=x+16+TIME_W;
+    g.fillText(fit(r.title, W-PAD-tx-12), tx, y+(r.sub?23:21));
+    if(r.note && !r.sub){ g.font=F(600,11); g.fillStyle="#8b97a3"; g.fillText(fit(r.note, W-PAD-tx-12), tx, y+36); }
+    if(r.note && r.sub){
+      g.font=F(600,11); g.fillStyle="#8b97a3";
+      const nw=g.measureText(r.note).width;
+      g.fillText(r.note, Math.max(tx+10, W-PAD-12-nw), y+23);
+    }
+    y+=r.h;
+  });
+  g.font=F(600,11); g.fillStyle="#5b6672";
+  g.fillText("Practice Schedule · "+dayISO, PAD, H-PAD+6);
+
+  const url=cv.toDataURL("image/png");
+  let shareFile=null;
+  try{ cv.toBlob(b=>{ if(b) shareFile=new File([b], "schedule-"+dayISO+".png", {type:"image/png"}); }, "image/png"); }catch(e){}
+
+  const wrap=document.createElement("div"); wrap.className="cmodal";
+  wrap.innerHTML=`<div class="cbox" style="max-width:560px">
+    <div class="chead"><div><b>Schedule image</b><div class="who">${esc(nice)}</div></div>
+      <button class="cx" id="imx">×</button></div>
+    <div class="clist" style="padding:12px">
+      <img src="${url}" alt="Schedule" style="width:100%; display:block; border-radius:8px; border:1px solid var(--line)">
+      <p class="who" style="margin:10px 0 0">Touch and hold the image to save it or send it on.</p>
+    </div>
+    <div class="cfoot">
+      <button class="btn btn-ghost btn-sm" id="imclose">Close</button>
+      <button class="btn btn-primary btn-sm" id="imshare" style="margin-left:auto">Share</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  document.getElementById("imx").onclick=close;
+  document.getElementById("imclose").onclick=close;
+  document.getElementById("imshare").onclick=()=>{
+    if(shareFile && navigator.canShare && navigator.canShare({files:[shareFile]})){
+      navigator.share({files:[shareFile], title:"Schedule "+dayISO}).catch(()=>{});
+      return;
+    }
+    const a=document.createElement("a");
+    a.href=url; a.download="schedule-"+dayISO+".png"; a.click();
+  };
 }
 
 function timeOptions(sel){
@@ -1427,7 +1529,7 @@ async function scheduleScreen(v){
 
   const body=document.getElementById("schedbody");
   if(!items?.length){
-    body.innerHTML=`<div class="empty">Nothing scheduled.${me.role==="player"?" Use <b>Build Day</b> to set it up.":""}</div>`;
+    body.innerHTML=`<div class="empty">Nothing scheduled.${me.role==="player"?" Use <b>Build a day</b> to set it up.":""}</div>`;
     return;
   }
   body.innerHTML=renderTimeline(layout,{linkPractice: me.role==="player"});
@@ -1497,12 +1599,12 @@ async function scheduleWeek(v){
 }
 
 /* ============================================================
-   9b. BUILD DAY — where you set it up (player only)
+   9b. BUILD A DAY — where you set it up (player only)
    ============================================================ */
 async function buildScreen(v){
   if(me.role!=="player"){ v.innerHTML=`<div class="empty">Only you can build the schedule.</div>`; return; }
 
-  const [{data:items},{data:sess},{data:templates}] = await Promise.all([
+  const [{data:items},{data:sess},{data:presetRows}] = await Promise.all([
     sb.from("schedule_items").select("*").eq("player_id",me.id).eq("day",schedDay).order("start_time"),
     sb.from("sessions").select("id, minutes, sort, status, completed, drills(name,category,default_minutes)").eq("player_id",me.id).eq("logged_on",schedDay).order("sort"),
     sb.from("day_templates").select("*").eq("player_id",me.id).order("sort")
@@ -1516,12 +1618,26 @@ async function buildScreen(v){
   // coach bookings are MEANT to sit on top of practice, so they never count as a clash
   const hardAnchors=anchors.filter(i=>i.kind!=="coach");
 
+  /* Quick adds: one-tap fixed items. The four built-ins always exist; anything
+     you save yourself is stored per player and shown alongside them. Saved ones
+     are single-item rows in day_templates (the old whole-day templates are gone,
+     and a legacy multi-item row simply adds all of its items). */
+  const BUILTIN_QA=[
+    {name:"Gym 1h",     kind:"gym",    label:"Gym",    duration_mins:60},
+    {name:"Gym 30m",    kind:"gym",    label:"Gym",    duration_mins:30},
+    {name:"Travel 1h",  kind:"travel", label:"Travel", duration_mins:60},
+    {name:"Media 30m",  kind:"media",  label:"Media",  duration_mins:30}
+  ];
+  const savedQA=(presetRows||[]).filter(t=>Array.isArray(t.items) && t.items.length);
+  let qaEdit=false;
+
   v.innerHTML=`
     <div class="daybar">
       <button class="btn btn-ghost btn-sm" id="bprev">‹</button>
       <div class="dsel"><span class="who">Day</span><input type="date" id="bday" value="${schedDay}"></div>
       <button class="btn btn-ghost btn-sm" id="bnext">›</button>
       <button class="btn btn-ghost btn-sm" id="btoday">Today</button>
+      <button class="btn btn-ghost btn-sm" id="bexport">Export image</button>
     </div>
 
     <!-- 1. PRACTICE START (top) -->
@@ -1537,22 +1653,13 @@ async function buildScreen(v){
       `:`<div class="empty" style="padding:14px">Add drills on the Day Plan first — practice time comes from there.</div>`}
     </div>
 
-    <!-- 2. THE DAY + inline add (middle) -->
+    <!-- 2. FIXED ITEMS: quick adds, the list, inline add -->
     <div class="sec-h"><h2>Fixed items</h2></div>
     <div class="card" id="blist"></div>
 
-    <!-- 3. PRACTICE ORDER -->
-    <div class="sec-h"><h2>Practice order</h2></div>
-    <div class="card" id="porder"></div>
-
-    <!-- 4. TEMPLATES (bottom) -->
-    <div class="sec-h"><h2>Templates</h2></div>
-    <div class="card">
-      ${(templates||[]).length? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:${(items||[]).length?"10px":"0"}">
-        ${templates.map(t=>`<button class="btn btn-ghost btn-sm tmpl" data-id="${t.id}">${esc(t.name)}</button>`).join("")}
-      </div>` : `<p class="who" style="margin:0 0 ${(items||[]).length?"10px":"0"}">No templates yet.</p>`}
-      ${(items||[]).length?`<button class="btn btn-ghost btn-sm" id="savetmpl" style="width:100%">Save this day as a template</button>`:""}
-    </div>`;
+    <!-- 3. THE WHOLE DAY, IN ORDER -->
+    <div class="sec-h"><h2>Day order</h2></div>
+    <div class="card" id="porder"></div>`;
 
   const shift=n=>{ const d=new Date(schedDay+"T00:00:00"); d.setDate(d.getDate()+n); schedDay=isoDate(d); keepScroll(()=>buildScreen(v)); };
   document.getElementById("bprev").onclick=()=>shift(-1);
@@ -1570,74 +1677,129 @@ async function buildScreen(v){
     flash("Practice set"); keepScroll(()=>buildScreen(v));
   };
 
-  v.querySelectorAll(".tmpl").forEach(b=>b.onclick=async()=>{
-    const t=(templates||[]).find(x=>x.id===b.dataset.id); if(!t) return;
-    if(!confirm(`Apply "${t.name}" to ${schedDay}?`)) return;
-    const rows=(t.items||[]).map(it=>({
-      player_id:me.id, day:schedDay, kind:it.kind, label:it.label||null,
-      start_time:it.start_time||null, duration_mins:it.duration_mins||0,
-      is_private:!!it.is_private, is_anchor:it.kind!=="practice"
-    }));
-    if(t.practice_start && !rows.some(r=>r.kind==="practice"))
-      rows.push({player_id:me.id, day:schedDay, kind:"practice", label:"Practice", start_time:t.practice_start, is_anchor:false});
-    if(rows.length){ const {error}=await sb.from("schedule_items").insert(rows); if(error){ flash(error.message); return; } }
-    flash(`Applied ${t.name}`); keepScroll(()=>buildScreen(v));
-  });
-
-  const stmpl=document.getElementById("savetmpl");
-  if(stmpl) stmpl.onclick=async()=>{
-    const name=prompt("Name this template (e.g. Tournament day, Range day):");
-    if(!name) return;
-    const tItems=anchors.map(i=>({kind:i.kind, label:i.label, start_time:i.start_time, duration_mins:i.duration_mins, is_private:i.is_private}));
-    const {error}=await sb.from("day_templates").insert({
-      player_id:me.id, name, practice_start:practiceRow?.start_time||null, items:tItems, sort:(templates||[]).length });
-    if(error){ flash(error.message); return; }
-    flash(`Saved "${name}"`); keepScroll(()=>buildScreen(v));
+  document.getElementById("bexport").onclick=()=>{
+    const lay=layoutDay(items||[], drillsOf(sessRows), t2m(practiceRow?.start_time) ?? null);
+    if(!lay.blocks.length){ flash("Nothing to export yet"); return; }
+    exportDayImage(lay, schedDay, me.full_name||"");
   };
 
   renderBuildList();
-  renderOrder();
+  renderDayOrder();
 
-  /* ---- Practice order ----
-     The drills run back-to-back in `sort` order, so moving one up or down is
-     what changes the times. The times shown here are the real ones: they come
-     from the same layout the Schedule tab draws, fixed items and all. */
-  function renderOrder(){
+  /* ---- Day order ----
+     One list of everything on the day, in the order it happens. The arrows move
+     a row one place; what that means depends on what is moving:
+       drill ↔ drill  swap their place in the practice queue
+       item  ↔ item   the pair runs back-to-back from the earlier one's start
+       drill ↔ item   the item's start hops to the other side of that drill
+     Coach bookings sit on top of practice, so they aren't moved from here.
+     Times come from the same layout the Schedule tab draws, and the day is
+     re-read after every move, so what's on screen is always the truth. */
+  let _moving=false;
+
+  function dayEntries(){
+    const lay=layoutDay(items||[], drillsOf(sessRows), t2m(practiceRow?.start_time) ?? null);
+    const out=[]; let k=0;
+    lay.blocks.forEach(b=>{
+      if(b.kind==="practice" && b.drills && b.drills.length){
+        b.drills.forEach(d=>{
+          out.push({type:"drill", q:k, name:d.name, cat:d.category, kind:"practice", s:d.s, e:d.e});
+          k++;
+        });
+      } else {
+        const it=(items||[]).find(x=>String(x.id)===String(b.id));
+        out.push({type:b.kind==="coach"?"coach":"item", it, kind:b.kind,
+          name:b.label||(KIND_STYLE[b.kind]||KIND_STYLE.other).label,
+          s:b.s, e:b.e, freeFrom:(b.freeFrom!=null?b.freeFrom:b.s)});
+      }
+    });
+    // coach bookings that lie over practice aren't blocks — slot them in by time
+    (lay.coaches||[]).filter(c=>c.covers).forEach(c=>{
+      out.push({type:"coach", it:(items||[]).find(x=>String(x.id)===String(c.id)),
+        kind:"coach", name:c.label||"Coach", s:c.s, e:c.e});
+    });
+    out.sort((a,b)=> (a.s-b.s) || (a.type==="coach"?1:-1));
+    return out;
+  }
+
+  function renderDayOrder(){
     const box=document.getElementById("porder");
-    if(!sessRows.length){
-      box.innerHTML=`<div class="empty" style="border:0; padding:14px">No drills on this day yet. Add them on the <b>Day Plan</b> first.</div>`;
+    const ents=dayEntries();
+    if(!ents.length){
+      box.innerHTML=`<div class="empty" style="border:0; padding:14px">Nothing on this day yet. Add drills on the <b>Day Plan</b>, or a fixed item above.</div>`;
       return;
     }
-    const lay=layoutDay(items||[], drillsOf(sessRows), t2m(practiceRow?.start_time) ?? null);
-    const placed=[];
-    lay.blocks.forEach(b=>{ if(b.kind==="practice" && b.drills) b.drills.forEach(d=>placed.push(d)); });
+    const movable=[];
+    ents.forEach((e,i)=>{ if(e.type!=="coach") movable.push(i); });
 
-    const rows=sessRows.map((r,i)=>{
-      const p=placed[i], cat=r.drills.category;
-      const mins=sessionMins(r,schedDay);
-      return `<div class="row-item" style="gap:8px">
-        <span class="who" style="flex:0 0 18px; font-size:11px; text-align:right">${i+1}</span>
-        <div class="name" style="min-width:0">${esc(r.drills.name)}
-          <small>${p?`${m2t(p.s)} – ${m2t(p.e)} · `:""}${durLabel(mins)||"0m"}</small></div>
-        ${cat?`<span class="pill ${pillClass(cat)}" style="flex:0 0 auto">${esc(cat)}</span>`:""}
-        <span style="flex:0 0 auto; display:flex; gap:4px">
-          <button class="btn btn-ghost btn-sm omv" data-i="${i}" data-d="-1" ${i===0?"disabled style=\"opacity:.3\"":""}>↑</button>
-          <button class="btn btn-ghost btn-sm omv" data-i="${i}" data-d="1" ${i===sessRows.length-1?"disabled style=\"opacity:.3\"":""}>↓</button>
-        </span>
+    const rows=ents.map((e,i)=>{
+      const st=(e.type==="drill") ? KIND_STYLE.practice : (KIND_STYLE[e.kind]||KIND_STYLE.other);
+      const mi=movable.indexOf(i);
+      const up = mi>0, dn = mi>=0 && mi<movable.length-1;
+      const arrows = e.type==="coach"
+        ? `<span class="who" style="flex:0 0 auto; font-size:10px">over practice</span>`
+        : `<span style="flex:0 0 auto; display:flex; gap:4px">
+             <button class="btn btn-ghost btn-sm dmv" data-i="${i}" data-d="-1" ${up?"":'disabled style="opacity:.25"'}>↑</button>
+             <button class="btn btn-ghost btn-sm dmv" data-i="${i}" data-d="1" ${dn?"":'disabled style="opacity:.25"'}>↓</button>
+           </span>`;
+      const tag = e.type==="drill"
+        ? (e.cat?`<span class="pill ${pillClass(e.cat)}" style="flex:0 0 auto">${esc(e.cat)}</span>`:"")
+        : `<span class="pill" style="background:${st.bg}; color:${st.ac}; flex:0 0 auto">${st.label}</span>`;
+      return `<div class="row-item" style="gap:8px; border-left:3px solid ${st.ac}; padding-left:10px">
+        <div class="name" style="min-width:0">${esc(e.name)}
+          <small>${m2t(e.s)} – ${m2t(e.e)} · ${durLabel(e.e-e.s)||"0m"}</small></div>
+        ${tag}
+        ${arrows}
       </div>`;
     }).join("");
 
     box.innerHTML = rows +
-      `<p class="who" style="margin:10px 0 0">Moving a drill re-times everything after it. The Day Plan follows the same order.</p>`;
+      `<p class="who" style="margin:10px 0 0">Arrows re-time the day from that point on. Tap a fixed item above to set an exact time instead.</p>`;
 
-    box.querySelectorAll(".omv").forEach(b=>b.onclick=async()=>{
-      const i=+b.dataset.i, j=i+(+b.dataset.d);
-      if(j<0 || j>=sessRows.length) return;
-      const tmp=sessRows[i]; sessRows[i]=sessRows[j]; sessRows[j]=tmp;
-      renderOrder();                                   // show the new times straight away
-      const ok=await saveOrder();
-      if(ok) flash("Order updated");
+    box.querySelectorAll(".dmv").forEach(b=>b.onclick=async()=>{
+      if(_moving || b.disabled) return;
+      _moving=true;
+      try{
+        const i=+b.dataset.i, dir=+b.dataset.d;
+        const j=movable[movable.indexOf(i)+dir];
+        if(j==null) return;
+        const a=ents[Math.min(i,j)], z=ents[Math.max(i,j)];   // a is the earlier of the two
+        if(await applyMove(a,z)){ flash("Day updated"); keepScroll(()=>buildScreen(v)); }
+      } finally { _moving=false; }
     });
+  }
+
+  /* Put z (the later of the pair) ahead of a. */
+  async function applyMove(a,z){
+    if(a.type==="drill" && z.type==="drill"){
+      const t=sessRows[a.q]; sessRows[a.q]=sessRows[z.q]; sessRows[z.q]=t;
+      return await saveOrder();
+    }
+    if(a.type==="item" && z.type==="item"){
+      const dz=z.e-z.s;
+      return await setStarts([[z.it, a.s], [a.it, a.s+dz]]);
+    }
+    if(a.type==="drill" && z.type==="item"){
+      // the item takes the drill's slot; the drill is pushed out behind it
+      return await setStarts([[z.it, a.s]]);
+    }
+    if(a.type==="item" && z.type==="drill"){
+      // leave room in front of the item for that drill to drop into
+      const base = a.freeFrom!=null ? a.freeFrom : a.s;
+      return await setStarts([[a.it, Math.max(a.s, base+(z.e-z.s))]]);
+    }
+    return false;
+  }
+
+  async function setStarts(pairs){
+    for(const pair of pairs){
+      const it=pair[0], mins=pair[1];
+      if(!it) continue;
+      const clamped=Math.max(0, Math.min(mins, 23*60+55));
+      const {error}=await sb.from("schedule_items").update({start_time:m2t(clamped)}).eq("id",it.id);
+      if(error){ flash("Couldn't move that: "+error.message); return false; }
+    }
+    return true;
   }
 
   async function saveOrder(){
@@ -1663,6 +1825,17 @@ async function buildScreen(v){
       }
     }
 
+    // one-tap fixed items — they drop in at the time showing in the add row
+    const qaChips = `
+      <div style="margin-bottom:12px">
+        <span class="who" id="qa-when" style="display:block; margin-bottom:6px">Quick add · drops in at ${defTime}</span>
+        <div style="display:flex; gap:6px; flex-wrap:wrap">
+          ${BUILTIN_QA.map((q,i)=>`<button class="btn btn-ghost btn-sm qab" data-i="${i}">${esc(q.name)}</button>`).join("")}
+          ${savedQA.map(q=>`<button class="btn btn-ghost btn-sm qas" data-id="${q.id}">${esc(q.name)}${qaEdit?` <span class="qadel" data-id="${q.id}" style="color:#e0574f; font-weight:800; padding-left:4px">×</span>`:""}</button>`).join("")}
+          ${savedQA.length?`<button class="btn btn-ghost btn-sm" id="qaedit" style="opacity:.65">${qaEdit?"Done":"Edit"}</button>`:""}
+        </div>
+      </div>`;
+
     // the day, in time order, each row editable inline
     const dayRows = anchors.length ? anchors.map(it=>{
       const st=KIND_STYLE[it.kind]||KIND_STYLE.other;
@@ -1674,7 +1847,7 @@ async function buildScreen(v){
         <span class="who" style="font-size:11px; flex:0 0 auto">Edit</span>
         <button class="rowdel" data-id="${it.id}" title="Remove" style="font-size:20px; padding:0 8px">×</button>
       </div>`;
-    }).join("") : `<div class="empty" style="border:0; padding:14px">No fixed items yet. Add one below, or apply a template.</div>`;
+    }).join("") : `<div class="empty" style="border:0; padding:14px">No fixed items yet. Use a quick add above, or the + row below.</div>`;
 
     // the inline + add row
     const addRow = `
@@ -1687,10 +1860,11 @@ async function buildScreen(v){
         <input id="a-label" placeholder="Label" style="flex:2; min-width:110px">
         <label class="inline" style="font-size:12px; color:var(--muted); flex:0 0 auto"><input type="checkbox" id="a-priv" style="width:auto"> Private</label>
         <button class="btn btn-primary btn-sm" id="a-add" style="flex:0 0 auto">Add</button>
+        <button class="btn btn-ghost btn-sm" id="a-qa" style="flex:0 0 auto" title="Save these settings as a quick add">★ Save</button>
         <p class="who" id="a-hint" style="margin:0; flex:1 0 100%"></p>
       </div>`;
 
-    box.innerHTML = dayRows + addRow;
+    box.innerHTML = qaChips + dayRows + addRow;
 
     // hold on to the add-row settings so switching tabs or days doesn't reset them
     const remember=()=>{ buildDraft.time=val("a-time"); buildDraft.mins=+val("a-mins")||45; buildDraft.kind=val("a-kind"); };
@@ -1703,7 +1877,11 @@ async function buildScreen(v){
       lab.style.opacity = kv.kind==="coach" ? ".55" : "1";
       if(hint) hint.textContent = kv.kind==="coach" ? "Sits on top of practice — nothing moves, the drills in this window just show the name." : "";
     };
-    ["a-time","a-mins","a-kind"].forEach(id=>{ const el=document.getElementById(id); if(el) el.onchange=()=>{ remember(); syncKind(); }; });
+    ["a-time","a-mins","a-kind"].forEach(id=>{ const el=document.getElementById(id); if(el) el.onchange=()=>{
+      remember(); syncKind();
+      const qw=document.getElementById("qa-when");
+      if(qw) qw.textContent="Quick add · drops in at "+val("a-time");
+    }; });
     syncKind();
 
     document.getElementById("a-add").onclick=async()=>{
@@ -1719,6 +1897,52 @@ async function buildScreen(v){
         is_private:document.getElementById("a-priv").checked, is_anchor:kind!=="coach" });
       if(error){ flash(error.message); return; }
       flash("Added"); keepScroll(()=>buildScreen(v));
+    };
+
+    /* quick adds: drop one or more items in, back-to-back, from the add-row time */
+    const addQuick=async(list)=>{
+      let t=t2m(val("a-time"));
+      if(t==null) t=13*60;
+      const rows=list.map(q=>{
+        const kind=q.kind||"other", len=+q.duration_mins||30;
+        const row={player_id:me.id, day:schedDay, start_time:m2t(t), duration_mins:len,
+          kind, label:q.label||null, is_private:!!q.is_private, is_anchor:kind!=="coach"};
+        t+=len;
+        return row;
+      });
+      const {error}=await sb.from("schedule_items").insert(rows);
+      if(error){ flash(error.message); return; }
+      flash("Added"); keepScroll(()=>buildScreen(v));
+    };
+    box.querySelectorAll(".qab").forEach(b=>b.onclick=()=>addQuick([BUILTIN_QA[+b.dataset.i]]));
+    box.querySelectorAll(".qas").forEach(b=>b.onclick=async(e)=>{
+      if(e.target.closest(".qadel")) return;
+      const q=savedQA.find(x=>String(x.id)===b.dataset.id);
+      if(q) addQuick(q.items);
+    });
+    box.querySelectorAll(".qadel").forEach(x=>x.onclick=async(e)=>{
+      e.stopPropagation();
+      if(!confirm("Delete this quick add?")) return;
+      const {error}=await sb.from("day_templates").delete().eq("id",x.dataset.id);
+      if(error){ flash(error.message); return; }
+      flash("Deleted"); keepScroll(()=>buildScreen(v));
+    });
+    const qe=document.getElementById("qaedit");
+    if(qe) qe.onclick=()=>{ qaEdit=!qaEdit; renderBuildList(); };
+
+    document.getElementById("a-qa").onclick=async()=>{
+      remember();
+      const kv=parseKindValue(val("a-kind"));
+      const label=kv.label || val("a-label") || KIND_STYLE[kv.kind].label;
+      const len=+val("a-mins")||30;
+      const name=prompt("Name this quick add:", `${label} ${durLabel(len)}`);
+      if(!name) return;
+      const {error}=await sb.from("day_templates").insert({
+        player_id:me.id, name, practice_start:null, sort:savedQA.length,
+        items:[{kind:kv.kind, label, duration_mins:len, is_private:document.getElementById("a-priv").checked}]
+      });
+      if(error){ flash(error.message); return; }
+      flash(`Saved "${name}"`); keepScroll(()=>buildScreen(v));
     };
 
     box.querySelectorAll(".rowdel").forEach(b=>b.onclick=async(e)=>{

@@ -2149,8 +2149,11 @@ const TIER_STYLE = {
   Off:       {ac:"#5b6672", bg:"transparent",           row:"transparent",           badge:""},
   Unknown:   {ac:"#7a6a2e", bg:"rgba(122,106,46,.08)",  row:"rgba(122,106,46,.05)",  badge:""}
 };
+/* A manually chosen tier always wins. Only fall back to guessing
+   from the tournament name when nothing has been set by hand. */
 function weekTier(w){
   if(w.status!=="Tournament") return w.status==="Off" ? "Off" : "Unknown";
+  if(w.tier==="Major"||w.tier==="Signature"||w.tier==="Event") return w.tier;
   const t=(w.tournament||"").trim();
   if(MAJOR_RE.test(t)) return "Major";
   if(SIGNATURE_RE.test(t)) return "Signature";
@@ -2300,6 +2303,15 @@ async function seasonScreen(v){
         <div class="field"><label class="mini">Status</label>
           <select id="ew-status">${["Tournament","Off","Unknown"].map(o=>`<option ${o===w.status?"selected":""}>${o}</option>`).join("")}</select></div>
         <div class="field"><label class="mini">Tournament</label><input id="ew-tournament" value="${esc(w.tournament||"")}"></div>
+        <div class="field"><label class="mini">Event type</label>
+          <select id="ew-tier">
+            <option value="" ${!w.tier?"selected":""}>Auto — work it out from the name</option>
+            <option value="Major" ${w.tier==="Major"?"selected":""}>Major</option>
+            <option value="Signature" ${w.tier==="Signature"?"selected":""}>Signature / big week</option>
+            <option value="Event" ${w.tier==="Event"?"selected":""}>Regular tour event</option>
+          </select>
+          <div class="who" style="margin-top:5px; font-size:11px">Currently showing as <b>${weekTier(w)}</b>. Picking a type also marks the week as a Tournament.</div>
+        </div>
         <div class="field"><label class="mini">Course</label><input id="ew-course" value="${esc(w.course||"")}"></div>
         <div class="grid2">
           <div><label class="mini">City</label><input id="ew-city" value="${esc(w.city||"")}"></div>
@@ -2317,6 +2329,8 @@ async function seasonScreen(v){
       ["status","tournament","course","city","country"].forEach(f=>{
         rows[i][f]=document.getElementById("ew-"+f).value;
       });
+      rows[i].tier = document.getElementById("ew-tier").value || null;
+      if(rows[i].tier) rows[i].status="Tournament";
       rows[i]._dirty=true;
       const st=document.getElementById("sstate"); if(st) st.textContent="Unsaved changes";
       close(); drawSeason();
@@ -2340,7 +2354,7 @@ async function seasonScreen(v){
     document.getElementById("addweek").onclick=()=>{
       const nw=rows.length?Math.max(...rows.map(r=>r.week))+1:1;
       rows.push({id:null,player_id:me.id,year:seasonYear,week:nw,start_date:null,end_date:null,
-        country:"",city:"",tournament:"",course:"",status:"Unknown",_dirty:true});
+        country:"",city:"",tournament:"",course:"",status:"Unknown",tier:null,_dirty:true});
       drawSeason();
     };
     document.getElementById("addyear").onclick=async()=>{
@@ -2356,7 +2370,8 @@ async function seasonScreen(v){
       for(const r of rows){
         if(!r._dirty) continue;
         const payload={player_id:me.id,year:seasonYear,week:r.week,start_date:r.start_date,end_date:r.end_date,
-          country:r.country||null,city:r.city||null,tournament:r.tournament||null,course:r.course||null,status:r.status||"Unknown"};
+          country:r.country||null,city:r.city||null,tournament:r.tournament||null,course:r.course||null,
+          status:r.status||"Unknown",tier:r.tier||null};
         const res=r.id ? await sb.from("season_weeks").update(payload).eq("id",r.id)
                        : await sb.from("season_weeks").insert(payload).select("id").single();
         if(res.error){ ok=false; flash(res.error.message); break; }
@@ -2397,7 +2412,8 @@ async function teamScreen(v){
           <span class="pill p-Technical">${esc(p.role)}</span>
           <div class="name">${esc(p.full_name||"—")}
             <small>${esc(p.email||"")}</small></div>
-          <button class="btn btn-primary btn-sm padd" data-id="${p.id}">Give access</button>
+          <button class="btn btn-primary btn-sm padd" data-id="${p.id}"
+                  style="padding:5px 10px; font-size:11px; white-space:nowrap">Add</button>
         </div>`).join("")}
     </div>`:""}
 
@@ -2406,8 +2422,10 @@ async function teamScreen(v){
       <p style="font-size:12px; color:var(--muted); margin:0 0 12px">
         If someone isn't listed above, add them directly. Viewers can see your sheet,
         week, schedule and season, and comment on drills — but can't change anything.</p>
-      <div class="inline"><input id="vemail" placeholder="coach@email.com" style="flex:1">
-        <button class="btn btn-primary btn-sm" id="vadd">Give access</button></div>
+      <input id="vemail" placeholder="coach@email.com" type="email" autocapitalize="off"
+             autocorrect="off" spellcheck="false" style="width:100%; box-sizing:border-box">
+      <button class="btn btn-primary btn-sm" id="vadd"
+              style="margin-top:9px; padding:6px 12px; font-size:12px">Give access</button>
     </div>
 
     <div class="sec-h"><h2>Your team</h2><span class="meta">${(linked||[]).length} linked</span></div>
@@ -3429,6 +3447,26 @@ function loadZone(r){ return LOAD_ZONES.find(z => r <= z.max); }
 
 const ROT_DAYS = 42;   // a drill goes "cold" after six weeks unused
 
+/* Drill-count table state — kept outside progress() so the sort and
+   filter survive a redraw. */
+let dcSort = "count", dcDir = -1, dcCat = "all", dcYearOnly = true;
+
+/* Supabase caps a single select (1000 rows by default) and the imported
+   2026 spreadsheet alone is 648 sessions, so page through the lot.
+   Truncating here would silently under-count drills. */
+async function allSessions(pid, today){
+  const out=[]; const PAGE=1000;
+  for(let from=0; from<50000; from+=PAGE){
+    const {data,error}=await sb.from("sessions").select("drill_id, logged_on, status")
+      .eq("player_id",pid).lte("logged_on",today)
+      .order("logged_on").range(from, from+PAGE-1);
+    if(error||!data||!data.length) break;
+    out.push(...data);
+    if(data.length<PAGE) break;
+  }
+  return out;
+}
+
 async function progress(v){
   const pid = me.role==="coach" ? (activePlayerId||players[0]?.id) : me.id;
   if(!pid){ v.innerHTML=`<div class="empty">Link a player first.</div>`; return; }
@@ -3436,11 +3474,10 @@ async function progress(v){
   await refreshDrills();
   const today = todayISO(), from28 = daysAgoISO(27), from7 = daysAgoISO(6);
 
-  const [{data:recent},{data:history}] = await Promise.all([
+  const [{data:recent}, history] = await Promise.all([
     sb.from("sessions").select("logged_on, balls, minutes, status, drills(category)")
       .eq("player_id",pid).gte("logged_on",from28).lte("logged_on",today),
-    sb.from("sessions").select("drill_id, logged_on, status")
-      .eq("player_id",pid).lte("logged_on",today)
+    allSessions(pid, today)
   ]);
   const rec = (recent||[]).filter(isActualSession);
 
@@ -3492,10 +3529,14 @@ async function progress(v){
           : `Compares this week's balls against your average week over the last 28 days. Planned days aren't counted, only what you actually logged. It's a prompt to look, not a verdict.`}</p>`;
 
   /* ---- drill rotation ---- */
-  const lastUsed={};
-  (history||[]).filter(isActualSession).forEach(s=>{
+  const lastUsed={}, cntAll={}, cntYear={};
+  const yearStart = today.slice(0,4)+"-01-01";
+  const done = (history||[]).filter(isActualSession);
+  done.forEach(s=>{
     if(!s.drill_id) return;
     if(!lastUsed[s.drill_id] || s.logged_on > lastUsed[s.drill_id]) lastUsed[s.drill_id]=s.logged_on;
+    cntAll[s.drill_id]=(cntAll[s.drill_id]||0)+1;
+    if(s.logged_on >= yearStart) cntYear[s.drill_id]=(cntYear[s.drill_id]||0)+1;
   });
   const allDrills = Object.values(drillMap);
   const cold = allDrills.map(d=>({
@@ -3523,6 +3564,71 @@ async function progress(v){
         }).join("")
         + (cold.length>show.length ? `<p class="ld-note">${cold.length-show.length} more not shown.</p>` : "");
 
+  /* ---- every drill, with a count of times done ---- */
+  const catList = [...new Set(allDrills.map(d=>d.category).filter(Boolean))].sort();
+  const totalDone = done.filter(s=>s.drill_id).length;
+  const yearDone  = done.filter(s=>s.drill_id && s.logged_on>=yearStart).length;
+
+  function countsCard(){
+    const cnt = dcYearOnly ? cntYear : cntAll;
+    let list = allDrills.map(d=>({
+      d, n: cnt[d.id]||0, last: lastUsed[d.id]||null
+    }));
+    if(dcCat!=="all") list=list.filter(x=>(x.d.category||"")===dcCat);
+
+    list.sort((a,b)=>{
+      let r;
+      if(dcSort==="name")      r = a.d.name.localeCompare(b.d.name);
+      else if(dcSort==="cat")  r = (a.d.category||"").localeCompare(b.d.category||"") || a.d.name.localeCompare(b.d.name);
+      else                     r = a.n - b.n || a.d.name.localeCompare(b.d.name);
+      return r * dcDir;
+    });
+
+    const never = list.filter(x=>x.n===0).length;
+    if(!list.length) return `<div class="empty" style="border:0; padding:18px">No drills in that category.</div>`;
+
+    return list.map(x=>`
+      <div class="row-item">
+        <span class="pill ${pillClass(x.d.category)}">${esc(x.d.category||"—")}</span>
+        <div class="name">${esc(x.d.name)}
+          <small>${x.last
+            ? "Last done "+new Date(x.last+"T00:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})
+            : "Never logged"}</small></div>
+        <span class="rot-gap" style="font-weight:800; font-size:15px;
+              color:${x.n===0?"var(--faint)":"var(--ink)"}; min-width:34px; text-align:right">${x.n}</span>
+      </div>`).join("")
+      + `<p class="ld-note">${list.length} drills · ${never} never done${dcYearOnly?" this year":""}.</p>`;
+  }
+
+  function drawCounts(){
+    const box=document.getElementById("dclist"); if(box) box.innerHTML=countsCard();
+    document.querySelectorAll(".dcs").forEach(b=>{
+      b.classList.toggle("on", b.dataset.s===dcSort);
+      const arrow = b.dataset.s===dcSort ? (dcDir===1?" ↑":" ↓") : "";
+      b.textContent = b.dataset.lab + arrow;
+    });
+    const rb=document.getElementById("dcrange");
+    if(rb) rb.textContent = dcYearOnly ? today.slice(0,4) : "All time";
+    const mt=document.getElementById("dcmeta");
+    if(mt) mt.textContent = (dcYearOnly?yearDone:totalDone).toLocaleString()+" sessions logged";
+  }
+
+  const countsBlock = `
+    <div class="sec-h" style="margin-top:26px"><h2>Every drill</h2>
+      <span class="meta" id="dcmeta"></span></div>
+    <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; align-items:center">
+      <button class="btn btn-ghost btn-sm dcs" data-s="count" data-lab="Times done"></button>
+      <button class="btn btn-ghost btn-sm dcs" data-s="name" data-lab="Name"></button>
+      <button class="btn btn-ghost btn-sm dcs" data-s="cat" data-lab="Category"></button>
+      <button class="btn btn-ghost btn-sm" id="dcrange" style="margin-left:auto"></button>
+      <select id="dccat" style="background:var(--panel); border:1px solid var(--line); color:var(--ink);
+              border-radius:8px; padding:6px 9px; font-size:12px; font-weight:700">
+        <option value="all" ${dcCat==="all"?"selected":""}>All categories</option>
+        ${catList.map(c=>`<option value="${esc(c)}" ${dcCat===c?"selected":""}>${esc(c)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="card" id="dclist"></div>`;
+
   const picker = me.role==="coach" && players.length
     ? `<select id="ppick" style="background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 10px;font-weight:700">${players.map(p=>`<option value="${p.id}" ${p.id===pid?'selected':''}>${esc(p.name)}</option>`).join("")}</select>`
     : "";
@@ -3544,7 +3650,18 @@ async function progress(v){
 
     <div class="sec-h" style="margin-top:26px"><h2>Drill rotation</h2>
       <span class="meta">${warm} in rotation · ${cold.length} gone cold</span></div>
-    <div class="card">${rotCard}</div>`;
+    <div class="card">${rotCard}</div>
+
+    ${countsBlock}`;
+
+  document.querySelectorAll(".dcs").forEach(b=>b.onclick=()=>{
+    if(dcSort===b.dataset.s) dcDir = -dcDir;
+    else { dcSort=b.dataset.s; dcDir = b.dataset.s==="count" ? -1 : 1; }
+    keepScroll(()=>drawCounts());
+  });
+  document.getElementById("dcrange").onclick=()=>{ dcYearOnly=!dcYearOnly; keepScroll(()=>drawCounts()); };
+  document.getElementById("dccat").onchange=e=>{ dcCat=e.target.value; keepScroll(()=>drawCounts()); };
+  drawCounts();
 
   if(me.role==="coach" && players.length){
     document.getElementById("ppick").onchange=e=>{ activePlayerId=e.target.value; progress(v); };

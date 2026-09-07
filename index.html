@@ -71,6 +71,7 @@
 
   /* tabs */
   .stickytop{position:sticky; top:0; z-index:30; background:var(--bg)}
+  #tabview{padding-top:14px}
   nav.tabs{display:flex; gap:4px; padding:10px 0 6px; background:var(--bg); z-index:20; border-bottom:1px solid var(--line)}
   nav.tabs button{background:none; border:0; padding:9px 14px; font-size:12px; color:var(--muted); border-radius:8px; font-weight:700; text-transform:uppercase; letter-spacing:.05em}
   nav.tabs button.on{background:var(--blood-2); color:var(--lime-ink)}
@@ -2325,6 +2326,207 @@ const TIER_STYLE = {
 };
 /* A manually chosen tier always wins. Only fall back to guessing
    from the tournament name when nothing has been set by hand. */
+/* ------------------------------------------------------------
+   SEASON — the schedule itself, plus who's coaching which days.
+   Both views read the same season_weeks rows, so the coaches grid
+   already knows every week of the year and what's on it.
+   ------------------------------------------------------------ */
+let seasonView="season";
+
+async function seasonScreen(v){
+  v.innerHTML = subToggle([["season","Season schedule"],["coaches","Coaches"]], seasonView)
+    + `<div id="seasonbody"><div class="load">Loading</div></div>`;
+  v.querySelectorAll(".sv").forEach(b=>b.onclick=()=>{
+    if(seasonView===b.dataset.v) return;
+    seasonView=b.dataset.v;
+    keepScroll(()=>seasonScreen(v));
+  });
+  const body=document.getElementById("seasonbody");
+  if(!body) return;
+  if(seasonView==="coaches") await coachesScreen(body);
+  else await seasonPlan(body);
+}
+
+const COACH_COLOURS=["#e06faf","#2e5aa8","#c9a227","#00a651","#7f77dd","#e0864f"];
+const DAY_NAMES=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+
+function coachColour(name, all){
+  const i=all.indexOf(name);
+  return COACH_COLOURS[(i<0?0:i)%COACH_COLOURS.length];
+}
+
+async function coachesScreen(box){
+  const pid = me.role==="player" ? me.id : activePlayerId;
+  if(!pid){ box.innerHTML=`<div class="empty">No player linked.</div>`; return; }
+  const canEdit = me.role==="player";
+
+  const {data:years}=await sb.from("season_weeks").select("year").eq("player_id",pid);
+  const yrList=[...new Set((years||[]).map(y=>y.year))].sort();
+  if(yrList.length && !yrList.includes(seasonYear)) seasonYear=yrList[yrList.length-1];
+
+  const [{data:weeks},{data:cw}] = await Promise.all([
+    sb.from("season_weeks").select("*").eq("player_id",pid).eq("year",seasonYear).order("week"),
+    sb.from("coach_weeks").select("*").eq("player_id",pid).eq("year",seasonYear).order("week")
+  ]);
+  const blocks=cw||[];
+  const names=[...new Set(blocks.map(b=>b.coach))].sort();
+  const totals={};
+  blocks.forEach(b=>{
+    const d=Math.max(0,(b.day_to-b.day_from)+1);
+    totals[b.coach]=totals[b.coach]||{weeks:0,days:0};
+    totals[b.coach].weeks++; totals[b.coach].days+=d;
+  });
+
+  if(!weeks?.length){
+    box.innerHTML=`<div class="empty">No weeks for ${seasonYear} yet. Build the season on the <b>Season schedule</b> view first — the coaches grid follows it.</div>`;
+    return;
+  }
+
+  const fmt=d=>{ if(!d)return ""; const x=new Date(d+"T00:00:00"); return x.toLocaleDateString(undefined,{day:'numeric',month:'short'}); };
+  const MONTHS=["January","February","March","April","May","June",
+                "July","August","September","October","November","December"];
+
+  const groups={};
+  weeks.forEach(w=>{
+    const key = w.start_date ? w.start_date.slice(0,7) : "unknown";
+    (groups[key]=groups[key]||[]).push(w);
+  });
+
+  box.innerHTML=`
+    <div class="daybar">
+      <div class="dsel"><span class="who">Year</span>
+        <select id="cyr" style="background:transparent;border:0;color:var(--ink);font-weight:700">
+          ${yrList.map(y=>`<option ${y===seasonYear?'selected':''}>${y}</option>`).join("")}
+        </select></div>
+      <span class="who" style="margin-left:auto; display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+        ${names.length?names.map(n=>`<span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${coachColour(n,names)};margin-right:5px"></i>${esc(n)} ${totals[n].days}d</span>`).join(""):"No coaches set"}
+      </span>
+    </div>
+    <div style="display:flex; gap:3px; margin-bottom:7px; padding:0 11px">
+      ${DAY_NAMES.map(d=>`<span style="flex:1; text-align:center; font-size:9px; color:var(--faint); font-weight:700; letter-spacing:.06em">${d.slice(0,3).toUpperCase()}</span>`).join("")}
+    </div>
+    <div id="cwlist"></div>`;
+
+  document.getElementById("cyr").onchange=e=>{ seasonYear=+e.target.value; coachesScreen(box); };
+
+  const list=document.getElementById("cwlist");
+  list.innerHTML=Object.keys(groups).sort().map(key=>{
+    const label = key==="unknown" ? "Undated" : MONTHS[+key.slice(5,7)-1]+" "+key.slice(0,4);
+    return `<div style="margin-bottom:16px">
+      <div style="font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+                  padding:6px 2px; border-bottom:1px solid var(--line); margin-bottom:6px">${label}</div>
+      ${groups[key].map(w=>{
+        const tier=weekTier(w), ts=TIER_STYLE[tier];
+        const isOff = tier==="Off" || tier==="Unknown";
+        const mine=blocks.filter(b=>b.week===w.week);
+        const place=[w.city,w.country].filter(Boolean).join(", ");
+        return `<div class="cwrow" data-w="${w.week}" style="
+            border-left:3px solid ${isOff?"var(--line)":ts.ac};
+            background:${isOff||!mine.length?"transparent":ts.row};
+            border-radius:0 8px 8px 0; padding:9px 11px; margin-bottom:6px; ${canEdit?"cursor:pointer":""}">
+          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:8px">
+            <span style="font-size:10px; color:var(--faint); font-weight:700">W${w.week}</span>
+            <span style="font-size:13px; font-weight:${isOff?"400":"700"}; color:${isOff?"var(--muted)":ts.ac};
+                  overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(w.tournament||w.status||"—")}</span>
+            <span style="margin-left:auto; font-size:10px; color:var(--faint); white-space:nowrap">${fmt(w.start_date)}${w.end_date?"–"+fmt(w.end_date):""}</span>
+          </div>
+          ${mine.length? mine.map(b=>coachBar(b,names)).join("")
+            : `<div style="display:flex; gap:3px">${[1,2,3,4,5,6,7].map(()=>
+                `<div style="flex:1; height:24px; background:var(--panel); border:1px solid var(--panel-2); border-radius:4px"></div>`).join("")}</div>`}
+          ${mine.length?`<div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:6px">${
+            mine.map(b=>`<span style="font-size:10px; color:var(--muted)">
+              <i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${coachColour(b.coach,names)};margin-right:4px"></i>
+              ${esc(b.coach)} · ${DAY_NAMES[b.day_from-1].slice(0,3)}${b.day_to>b.day_from?"–"+DAY_NAMES[b.day_to-1].slice(0,3):""}${b.location?" · "+esc(b.location):""}</span>`).join("")}
+          </div>`:""}
+        </div>`;
+      }).join("")}
+    </div>`;
+  }).join("");
+
+  if(canEdit) list.querySelectorAll(".cwrow").forEach(el=>
+    el.onclick=()=>editCoachWeek(weeks.find(w=>w.week===+el.dataset.w), blocks, names, box));
+}
+
+function coachBar(b, names){
+  const col=coachColour(b.coach,names);
+  return `<div style="display:flex; gap:3px; margin-bottom:3px">${
+    [1,2,3,4,5,6,7].map(d=>{
+      const on = d>=b.day_from && d<=b.day_to;
+      const first = d===b.day_from, last = d===b.day_to;
+      const radius = on ? `${first?"4px":"0"} ${last?"4px":"0"} ${last?"4px":"0"} ${first?"4px":"0"}` : "4px";
+      return `<div style="flex:1; height:24px; border-radius:${radius};
+        background:${on?col:"var(--panel)"}; ${on?"":"border:1px solid var(--panel-2)"}"></div>`;
+    }).join("")}</div>`;
+}
+
+function editCoachWeek(w, blocks, names, box){
+  const mine=blocks.filter(b=>b.week===w.week);
+  const wrap=document.createElement("div"); wrap.className="cmodal";
+  wrap.innerHTML=`<div class="cbox">
+    <div class="chead"><div><b>Week ${w.week} · ${esc(w.tournament||w.status||"—")}</b>
+      <div class="who">${[w.course,w.city,w.country].filter(Boolean).map(esc).join(", ")||"&nbsp;"}</div></div>
+      <button class="cx" id="cwx">×</button></div>
+    <div class="clist" style="padding:14px 16px">
+      <div id="cwmine">${mine.length?mine.map(b=>`
+        <div class="row-item" style="align-items:center">
+          <i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${coachColour(b.coach,names)};margin-right:8px"></i>
+          <div class="name">${esc(b.coach)}<small>${DAY_NAMES[b.day_from-1]}${b.day_to>b.day_from?" – "+DAY_NAMES[b.day_to-1]:""}${b.location?" · "+esc(b.location):""}</small></div>
+          <button class="btn btn-ghost btn-sm cwdel" data-id="${b.id}" style="width:auto; color:#e0864f">Remove</button>
+        </div>`).join(""):`<div class="who">Nobody with you this week yet.</div>`}</div>
+
+      <div style="border-top:1px solid var(--line); margin-top:12px; padding-top:12px">
+        <label class="mini">Coach</label>
+        <input id="cw-name" placeholder="Type a name">
+        ${names.length?`<div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:7px">
+          ${names.map(n=>`<button class="btn btn-ghost btn-sm cwpick" data-n="${esc(n)}" style="width:auto; padding:5px 9px">${esc(n)}</button>`).join("")}
+        </div>`:`<p class="who" style="margin:7px 0 0; text-transform:none; letter-spacing:0">Any name works — they don't need an app account.</p>`}
+        <div class="grid2" style="margin-top:10px">
+          <div><label class="mini">From</label>
+            <select id="cw-from">${DAY_NAMES.map((d,i)=>`<option value="${i+1}">${d}</option>`).join("")}</select></div>
+          <div><label class="mini">To</label>
+            <select id="cw-to">${DAY_NAMES.map((d,i)=>`<option value="${i+1}" ${i===2?"selected":""}>${d}</option>`).join("")}</select></div>
+        </div>
+        <label class="mini" style="margin-top:10px; display:block">Where</label>
+        <input id="cw-loc" value="${esc([w.course,w.city].filter(Boolean)[0]||"")}" placeholder="TPC Sawgrass">
+        <div id="cw-msg" style="margin-top:8px"></div>
+      </div>
+    </div>
+    <div class="cfoot">
+      <button class="btn btn-ghost btn-sm" id="cw-close">Close</button>
+      <button class="btn btn-primary btn-sm" id="cw-add" style="margin-left:auto; width:auto">Add to week</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  document.getElementById("cwx").onclick=close;
+  document.getElementById("cw-close").onclick=close;
+
+  wrap.querySelectorAll(".cwpick").forEach(b=>b.onclick=()=>{
+    document.getElementById("cw-name").value=b.dataset.n;
+  });
+
+  wrap.querySelectorAll(".cwdel").forEach(b=>b.onclick=async()=>{
+    const {error}=await sb.from("coach_weeks").delete().eq("id",b.dataset.id);
+    if(error){ flash("Couldn't remove: "+error.message); return; }
+    flash("Removed"); close(); coachesScreen(box);
+  });
+
+  document.getElementById("cw-add").onclick=async()=>{
+    const msg=document.getElementById("cw-msg");
+    const name=val("cw-name");
+    if(!name){ msg.innerHTML=`<div class="err">Enter a coach name.</div>`; return; }
+    const from=+document.getElementById("cw-from").value;
+    const to=+document.getElementById("cw-to").value;
+    if(to<from){ msg.innerHTML=`<div class="err">The last day can't be before the first.</div>`; return; }
+    const {error}=await sb.from("coach_weeks").insert({
+      player_id:me.id, year:seasonYear, week:w.week, coach:name,
+      day_from:from, day_to:to, location:val("cw-loc")||null
+    });
+    if(error){ msg.innerHTML=`<div class="err">${esc(error.message)}</div>`; return; }
+    flash("Added"); close(); coachesScreen(box);
+  };
+}
+
 function weekTier(w){
   if(w.status!=="Tournament") return w.status==="Off" ? "Off" : "Unknown";
   if(w.tier==="Major"||w.tier==="Signature"||w.tier==="Event") return w.tier;
@@ -2337,7 +2539,7 @@ function weekTier(w){
 let seasonYear = new Date().getFullYear();
 let seasonFilter = "all";
 
-async function seasonScreen(v){
+async function seasonPlan(v){
   const pid = me.role==="player" ? me.id : activePlayerId;
   if(!pid){ v.innerHTML=`<div class="empty">No player linked.</div>`; return; }
   const canEdit = me.role==="player";
@@ -2384,7 +2586,7 @@ async function seasonScreen(v){
         <button class="btn btn-primary btn-sm" id="ssave">Save season</button>
       </div></div>`:""}`;
 
-  document.getElementById("yrsel").onchange=e=>{ seasonYear=+e.target.value; seasonScreen(v); };
+  document.getElementById("yrsel").onchange=e=>{ seasonYear=+e.target.value; seasonPlan(v); };
   document.getElementById("seasonexport").onclick=()=>{
     const evs=(weeks||[]).filter(w=>w.status==="Tournament"&&w.start_date).map(w=>({
       allDay:true, start:w.start_date, end:w.end_date||w.start_date,
@@ -2536,7 +2738,7 @@ async function seasonScreen(v){
       if(!y||isNaN(+y)) return;
       const {error}=await sb.from("season_weeks").insert({player_id:me.id,year:+y,week:1,status:"Unknown"});
       if(error){ flash(error.message); return; }
-      seasonYear=+y; flash("Year added"); seasonScreen(v);
+      seasonYear=+y; flash("Year added"); seasonPlan(v);
     };
     document.getElementById("ssave").onclick=async()=>{
       const st=document.getElementById("sstate"); st.textContent="Saving…";
@@ -2686,13 +2888,18 @@ async function resultsScreen(v){
   const {data:results}=await sb.from("dg_results").select("*")
     .eq("player_id",pid).order("start_date",{ascending:false});
 
+  const thisYear=new Date().getFullYear();
   v.innerHTML=`
+    ${isOwner?`<div class="daybar" style="margin-bottom:10px">
+      <button class="btn btn-ghost btn-sm" id="dgsetup">Data Golf ⚙</button>
+      ${settings?.dg_id?`<button class="btn btn-primary btn-sm" id="dgrefresh" style="width:auto">Refresh ${thisYear}</button>
+      <button class="btn btn-ghost btn-sm" id="dgfull">Rebuild all years</button>`:""}
+      <span class="who" style="margin-left:auto">${settings?.last_import?`Updated ${whenAgo(settings.last_import)}`:"Never refreshed"}</span>
+    </div>`:""}
     <div class="daybar rvbar">
       ${[["list","Tournaments"],["heat","Heatmap"],["trend","Trend"],["form","Form"],
          ["lag","Practice lag"],["tier","Compare"],["corr","Practice vs performance"]]
         .map(t=>`<button class="btn btn-ghost btn-sm rv ${resultsView===t[0]?"on":""}" data-v="${t[0]}">${t[1]}</button>`).join("")}
-      ${isOwner?`<button class="btn btn-ghost btn-sm" id="dgsetup" style="margin-left:auto">Data Golf ⚙</button>`:""}
-      ${isOwner&&settings?.dg_id?`<button class="btn btn-primary btn-sm" id="dgrefresh">Refresh</button>`:""}
     </div>
     <div id="resbody"></div>`;
 
@@ -2707,7 +2914,9 @@ async function resultsScreen(v){
   if(isOwner){
     document.getElementById("dgsetup").onclick=()=>dgSetup(settings,v);
     const rf=document.getElementById("dgrefresh");
-    if(rf) rf.onclick=()=>dgImport(settings,v);
+    if(rf) rf.onclick=()=>dgImport(settings,v,"season");
+    const rfa=document.getElementById("dgfull");
+    if(rfa) rfa.onclick=()=>dgImport(settings,v,"all");
   }
 
   const body=document.getElementById("resbody");
@@ -2772,11 +2981,28 @@ async function dgSetup(settings,v){
   };
 }
 
-async function dgImport(settings,v){
+/* "Updated 3 hours ago" — so you can tell at a glance whether a refresh ran. */
+function whenAgo(iso){
+  if(!iso) return "never";
+  const mins=Math.round((Date.now()-new Date(iso).getTime())/60000);
+  if(mins<2) return "just now";
+  if(mins<60) return mins+" min ago";
+  const hrs=Math.round(mins/60);
+  if(hrs<24) return hrs+(hrs===1?" hour ago":" hours ago");
+  const days=Math.round(hrs/24);
+  if(days<30) return days+(days===1?" day ago":" days ago");
+  return new Date(iso).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
+}
+
+/* mode "season" = this year only (quick, ~5s). "all" = 2019 to now (slow, a minute
+   or so — Data Golf is rate limited so each call waits its turn). */
+async function dgImport(settings,v,mode){
   if(!settings?.dg_id){ flash("Set your Data Golf ID first"); return; }
   const body=document.getElementById("resbody");
   const thisYear=new Date().getFullYear();
-  const years=[]; for(let y=thisYear; y>=2019; y--) years.push(y);
+  const years=[];
+  if(mode==="season") years.push(thisYear);
+  else for(let y=thisYear; y>=2019; y--) years.push(y);
   const tours=["pga","euro"];
   const MYID=+settings.dg_id;
   let imported=0, problems=[];
@@ -2851,7 +3077,13 @@ async function dgImport(settings,v){
   }
   await sb.from("app_settings").update({last_import:new Date().toISOString()}).eq("player_id",me.id);
   if(!imported){
-    body.innerHTML=`<div class="empty">Nothing imported.${problems.length?`<div style="margin-top:8px; font-size:12px; color:var(--muted)">${esc(problems.slice(0,3).join(" · "))}</div>`:""}</div>`;
+    flash(problems.length ? "Refresh failed — see the note below" : "Nothing new from Data Golf");
+    await resultsScreen(v);
+    if(problems.length){
+      const b=document.getElementById("resbody");
+      if(b) b.insertAdjacentHTML("afterbegin",
+        `<div class="empty" style="margin-bottom:12px">Data Golf returned nothing.<div style="margin-top:8px; font-size:12px; color:var(--muted)">${esc(problems.slice(0,3).join(" · "))}</div></div>`);
+    }
     return;
   }
   flash(`Imported ${imported} events`);
@@ -3334,123 +3566,420 @@ async function coachPlayers(v){
   box.innerHTML=players.map(p=>`<div class="row-item"><div class="name">${esc(p.name)}</div></div>`).join("");
 }
 
+/* ============================================================
+   6b. TECHNICAL — blueprint, documents, ask
+   The blueprint below is the PDF reproduced word for word, its own
+   spellings kept on purpose. It lives as data now rather than markup
+   so the Ask view can search it alongside your own documents.
+   ============================================================ */
+const BLUEPRINT=[
+  {name:"SETUP", phase:"P1", colour:"#c9a227", rows:[
+    ["POSTURE","Neutral Pelvis - Hinge, Scaps Retracted, Closer to ball"],
+    ["BALL POSITION","Back for Draw + Irons & Up for Fades + Driver"],
+    ["TILTS","Lead Hip High, Trail side lower as clubs get longer"],
+    ["ALIGNMENT","Parallel Left - Use two sticks then drop the top one"],
+    ["GRIP","Strong Lead Hand 45+ & Neutral to Side Trail Hand"],
+    ["VSP","60 Mid Irons, 48 Driver, 65 Wedges, 75+ Chipping < 30yd"]
+  ]},
+  {name:"BACKSWING", phase:"P2-P4", colour:"#e0342b", rows:[
+    ["SEQUENCE","Club, Hands, Pelvis, Torso,"],
+    ["GRF","Counter movement lead side then shift pressure to trail side"],
+    ["PIVOT","\"Centered\" Pelvis loaded , Ribcage drives \"Turning On Tilt\""],
+    ["TRAIL ARM","Externally rotated elbow infront of shirt seam - Elbow not retracted"],
+    ["LEAD ARM","Lower On Sholuder Plane with irons - Shoulders create pitch vs flat turn"],
+    ["PLANE","Elbow / Shaft Plane"],
+    ["COM","Outside hands in takeaway, pitching above hand path, Depth at Top"],
+    ["CLUB FACE / WRIST ANGLES","Toe up to open with some lead wrist extension at top"]
+  ]},
+  {name:"DOWNSWING", phase:"P4-P6", colour:"#2e5aa8", rows:[
+    ["SEQUENCE","Feet, Pelvis, Torso, Hands, Club - Reverse of Backswing- \"Pause Drill\""],
+    ["GRF","R/L Just enough, AP - Lots of Lead Side \"Scuff\", Vertical"],
+    ["PIVOT","Horizontal & Frontal balanced - \"Harmonizing Movements\""],
+    ["TRAIL ARM","Externally rotated"],
+    ["LEAD ARM","Pronated, Horizontal Adduction - AKA \"Lead Arm In\""],
+    ["PLANE","Elbow Plane"],
+    ["COM","Behind Hand Path DRAW - Above / On Hand Path FADE"],
+    ["CLUB FACE / WRIST ANGLES","Lead wrist Flexing - to square face"]
+  ]},
+  {name:"DELIVERY", phase:"P6-P10", colour:"#00a651", rows:[
+    ["COM","Behind Hand Path - Very Important if AP Higher or will pull it"],
+    ["CLUB FACE","TM # You Use"],
+    ["CLUB PATH","TM # You Use"],
+    ["SHAFT LEAN / WRIST ANGLES","Wedges 13-15 Lean, 6Ir 12 Degrees, Inline Driver"],
+    ["","Spin Loft dependant on Driver Lean with + AOA = SMASH"]
+  ]},
+];
+
+const FAULT_TAGS=["Right miss","Left miss","Start line","Low point","Contact",
+  "Distance control","Speed","Trajectory","Driver","Irons","Wedges","Short game","Putting"];
+
+let techView="ask";
+let askQ="";
+let askTags=[];
+
 async function technicalScreen(v){
-  v.innerHTML=`
+  v.innerHTML = subToggle([["ask","Ask"],["docs","Documents"],["blueprint","Blueprint"]], techView)
+    + `<div id="techbody"><div class="load">Loading</div></div>`;
+  v.querySelectorAll(".sv").forEach(b=>b.onclick=()=>{
+    if(techView===b.dataset.v) return;
+    techView=b.dataset.v;
+    keepScroll(()=>technicalScreen(v));
+  });
+  const body=document.getElementById("techbody");
+  if(!body) return;
+  if(techView==="blueprint") renderBlueprint(body);
+  else if(techView==="docs") await techDocs(body);
+  else await techAsk(body);
+}
+
+function renderBlueprint(box){
+  box.innerHTML=`
     <div class="inline" style="margin-bottom:14px">
       <h2 style="font-size:18px; margin:0">Technical Blueprint</h2>
       <span class="who" style="margin-left:auto">Your swing reference</span>
     </div>
-    
-    <div style="border-radius:10px; overflow:hidden; margin-bottom:14px; border:1px solid #c9a22755">
-      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#c9a227">
-        <span style="font-size:15px; font-weight:800; color:#fff; letter-spacing:.06em">SETUP</span>
-        <span style="font-size:11px; font-weight:700; color:#fff; opacity:.85; background:rgba(0,0,0,.18); padding:2px 9px; border-radius:999px">P1</span>
-      </div>
-      <div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">POSTURE</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Neutral Pelvis - Hinge, Scaps Retracted, Closer to ball</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">BALL POSITION</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Back for Draw + Irons & Up for Fades + Driver</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">TILTS</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Lead Hip High, Trail side lower as clubs get longer</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">ALIGNMENT</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Parallel Left - Use two sticks then drop the top one</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">GRIP</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Strong Lead Hand 45+ & Neutral to Side Trail Hand</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">VSP</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">60 Mid Irons, 48 Driver, 65 Wedges, 75+ Chipping < 30yd</div>
-      </div>
-    </div>
-    <div style="border-radius:10px; overflow:hidden; margin-bottom:14px; border:1px solid #e0342b55">
-      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#e0342b">
-        <span style="font-size:15px; font-weight:800; color:#fff; letter-spacing:.06em">BACKSWING</span>
-        <span style="font-size:11px; font-weight:700; color:#fff; opacity:.85; background:rgba(0,0,0,.18); padding:2px 9px; border-radius:999px">P2-P4</span>
-      </div>
-      <div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">SEQUENCE</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Club, Hands, Pelvis, Torso,</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">GRF</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Counter movement lead side then shift pressure to trail side</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">PIVOT</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">"Centered" Pelvis loaded , Ribcage drives "Turning On Tilt"</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">TRAIL ARM</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Externally rotated elbow infront of shirt seam - Elbow not retracted</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">LEAD ARM</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Lower On Sholuder Plane with irons - Shoulders create pitch vs flat turn</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">PLANE</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Elbow / Shaft Plane</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">COM</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Outside hands in takeaway, pitching above hand path, Depth at Top</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">CLUB FACE / WRIST ANGLES</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Toe up to open with some lead wrist extension at top</div>
-      </div>
-    </div>
-    <div style="border-radius:10px; overflow:hidden; margin-bottom:14px; border:1px solid #2e5aa855">
-      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#2e5aa8">
-        <span style="font-size:15px; font-weight:800; color:#fff; letter-spacing:.06em">DOWNSWING</span>
-        <span style="font-size:11px; font-weight:700; color:#fff; opacity:.85; background:rgba(0,0,0,.18); padding:2px 9px; border-radius:999px">P4-P6</span>
-      </div>
-      <div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">SEQUENCE</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Feet, Pelvis, Torso, Hands, Club - Reverse of Backswing- "Pause Drill"</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">GRF</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">R/L Just enough, AP - Lots of Lead Side "Scuff", Vertical</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">PIVOT</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Horizontal & Frontal balanced - "Harmonizing Movements"</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">TRAIL ARM</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Externally rotated</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">LEAD ARM</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Pronated, Horizontal Adduction - AKA "Lead Arm In"</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">PLANE</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Elbow Plane</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">COM</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Behind Hand Path DRAW - Above / On Hand Path FADE</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">CLUB FACE / WRIST ANGLES</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Lead wrist Flexing - to square face</div>
-      </div>
-    </div>
-    <div style="border-radius:10px; overflow:hidden; margin-bottom:14px; border:1px solid #00a65155">
-      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#00a651">
-        <span style="font-size:15px; font-weight:800; color:#fff; letter-spacing:.06em">DELIVERY</span>
-        <span style="font-size:11px; font-weight:700; color:#fff; opacity:.85; background:rgba(0,0,0,.18); padding:2px 9px; border-radius:999px">P6-P10</span>
-      </div>
-      <div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">COM</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Behind Hand Path - Very Important if AP Higher or will pull it</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">CLUB FACE</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">TM # You Use</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">CLUB PATH</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">TM # You Use</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">SHAFT LEAN / WRIST ANGLES</div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Wedges 13-15 Lean, 6Ir 12 Degrees, Inline Driver</div>
-      </div><div style="display:flex; border-top:1px solid var(--line)">
-        <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em"></div>
-        <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">Spin Loft dependant on Driver Lean with + AOA = SMASH</div>
-      </div>
-    </div>
+    ${BLUEPRINT.map(s=>`
+      <div style="border-radius:10px; overflow:hidden; margin-bottom:14px; border:1px solid ${s.colour}55">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:${s.colour}">
+          <span style="font-size:15px; font-weight:800; color:#fff; letter-spacing:.06em">${s.name}</span>
+          <span style="font-size:11px; font-weight:700; color:#fff; opacity:.85; background:rgba(0,0,0,.18); padding:2px 9px; border-radius:999px">${s.phase}</span>
+        </div>
+        ${s.rows.map(r=>`<div style="display:flex; border-top:1px solid var(--line)">
+          <div style="flex:0 0 40%; padding:9px 12px; font-size:12px; font-weight:700; color:var(--ink); background:var(--panel-2); text-transform:uppercase; letter-spacing:.02em">${esc(r[0])}</div>
+          <div style="flex:1; padding:9px 12px; font-size:13px; color:var(--muted); line-height:1.4">${esc(r[1])}</div>
+        </div>`).join("")}
+      </div>`).join("")}
     <p class="who" style="text-align:center; margin-top:6px">May 2025</p>`;
+}
+
+/* ---- documents ------------------------------------------------ */
+
+function techPid(){ return me.role==="player" ? me.id : activePlayerId; }
+function fmtDocDate(d){ return d ? new Date(d+"T00:00:00").toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}) : ""; }
+
+async function techDocs(box){
+  const pid=techPid();
+  const {data:docs}=await sb.from("tech_docs").select("*").eq("player_id",pid)
+    .order("doc_date",{ascending:false, nullsFirst:false});
+  const canEdit = me.role==="player";
+  box.innerHTML=`
+    <div class="daybar">
+      <span class="who">${(docs||[]).length} document${(docs||[]).length===1?"":"s"}</span>
+      ${canEdit?`<button class="btn btn-primary btn-sm" id="dnew" style="width:auto; margin-left:auto">+ Add document</button>`:""}
+    </div>
+    <div id="dlist"></div>`;
+  if(canEdit) document.getElementById("dnew").onclick=()=>editDoc(null,box);
+  const list=document.getElementById("dlist");
+  if(!docs?.length){
+    list.innerHTML=`<div class="empty">Nothing here yet. Paste a transcribed lesson or your own notes — everything you add becomes searchable in Ask straight away.</div>`;
+    return;
+  }
+  list.innerHTML=docs.map(d=>`
+    <div class="card docrow" data-id="${d.id}" style="margin-top:10px; ${canEdit?"cursor:pointer":""}">
+      <div class="inline" style="margin-bottom:4px">
+        <b style="font-size:14px">${esc(d.title)}</b>
+        <span class="who" style="margin-left:auto">${esc(fmtDocDate(d.doc_date))}</span>
+      </div>
+      <div class="who" style="margin-bottom:8px">${esc(d.source||"—")}</div>
+      ${(d.tags||[]).length?`<div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px">${
+        d.tags.map(t=>`<span class="pill" style="background:var(--panel-2); color:var(--muted)">${esc(t)}</span>`).join("")}</div>`:""}
+      <div style="font-size:13px; color:var(--muted); line-height:1.45">${esc((d.body||"").slice(0,180))}${(d.body||"").length>180?"…":""}</div>
+    </div>`).join("");
+  if(canEdit) list.querySelectorAll(".docrow").forEach(el=>
+    el.onclick=()=>editDoc(docs.find(x=>x.id===el.dataset.id), box));
+}
+
+function editDoc(d, box){
+  const wrap=document.createElement("div"); wrap.className="cmodal";
+  wrap.innerHTML=`<div class="cbox">
+    <div class="chead"><div><b>${d?"Edit document":"New document"}</b>
+      <div class="who">Paste transcripts or type your own notes</div></div>
+      <button class="cx" id="dcx">×</button></div>
+    <div class="clist" style="padding:14px 16px">
+      <label class="mini">Title</label>
+      <input id="d-title" value="${esc(d?.title||"")}" placeholder="Mark — lesson notes">
+      <div class="grid2" style="margin-top:10px">
+        <div><label class="mini">Who it's from</label>
+          <input id="d-src" value="${esc(d?.source||"")}" placeholder="Mark"></div>
+        <div><label class="mini">Date</label>
+          <input type="date" id="d-date" value="${d?.doc_date||todayISO()}"></div>
+      </div>
+      <label class="mini" style="margin-top:10px; display:block">Tags, separated by commas</label>
+      <input id="d-tags" value="${esc((d?.tags||[]).join(", "))}" placeholder="right miss, driver, downswing">
+      <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:7px">
+        ${FAULT_TAGS.map(t=>`<button class="btn btn-ghost btn-sm tsug" data-t="${esc(t)}" style="width:auto; padding:5px 9px">${esc(t)}</button>`).join("")}
+      </div>
+      <label class="mini" style="margin-top:10px; display:block">Text</label>
+      <textarea id="d-body" rows="10" style="width:100%; box-sizing:border-box" placeholder="Paste the transcript or write your notes here">${esc(d?.body||"")}</textarea>
+      <div id="d-msg" style="margin-top:8px"></div>
+    </div>
+    <div class="cfoot">
+      ${d?`<button class="btn btn-ghost btn-sm" id="d-del" style="color:#e0864f">Delete</button>`:""}
+      <button class="btn btn-primary btn-sm" id="d-save" style="margin-left:auto; width:auto">Save</button>
+    </div></div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.onclick=e=>{ if(e.target===wrap) close(); };
+  document.getElementById("dcx").onclick=close;
+
+  wrap.querySelectorAll(".tsug").forEach(b=>b.onclick=()=>{
+    const f=document.getElementById("d-tags");
+    const have=f.value.split(",").map(x=>x.trim()).filter(Boolean);
+    const t=b.dataset.t;
+    if(have.some(x=>x.toLowerCase()===t.toLowerCase())) return;
+    have.push(t); f.value=have.join(", ");
+  });
+
+  document.getElementById("d-save").onclick=async()=>{
+    const msg=document.getElementById("d-msg");
+    const title=val("d-title"), body=document.getElementById("d-body").value.trim();
+    if(!title){ msg.innerHTML=`<div class="err">Give it a title.</div>`; return; }
+    if(!body){ msg.innerHTML=`<div class="err">Add some text — there's nothing to search otherwise.</div>`; return; }
+    const payload={
+      player_id:me.id, title, body,
+      source:val("d-src")||null,
+      doc_date:val("d-date")||null,
+      tags:val("d-tags").split(",").map(x=>x.trim()).filter(Boolean)
+    };
+    const res = d ? await sb.from("tech_docs").update(payload).eq("id",d.id)
+                  : await sb.from("tech_docs").insert(payload);
+    if(res.error){ msg.innerHTML=`<div class="err">${esc(res.error.message)}</div>`; return; }
+    flash(d?"Document updated":"Document added"); close(); techDocs(box);
+  };
+  const del=document.getElementById("d-del");
+  if(del) del.onclick=async()=>{
+    if(!confirm("Delete this document? Feedback you left on it stays.")) return;
+    const {error}=await sb.from("tech_docs").delete().eq("id",d.id);
+    if(error){ flash("Couldn't delete: "+error.message); return; }
+    flash("Deleted"); close(); techDocs(box);
+  };
+}
+
+/* ---- ask ------------------------------------------------------- */
+
+const ASK_STOP=new Set(("the a an and or to of in on it is are was be been am i my me you your for with "
+ +"when what why how do does did if but not that this these those at as so im ive get got keep keeps "
+ +"cant dont doesnt too very just really always never sometimes").split(" "));
+
+function askTokens(s){
+  return [...new Set((s||"").toLowerCase().replace(/[^a-z0-9\s]/g," ").split(/\s+/)
+    .filter(w=>w.length>2 && !ASK_STOP.has(w)))];
+}
+
+function askSnippet(text, toks){
+  const t=text||"";
+  const low=t.toLowerCase();
+  let at=-1;
+  for(const k of toks){ const i=low.indexOf(k); if(i>=0 && (at<0 || i<at)) at=i; }
+  if(at<0) return esc(t.slice(0,190))+(t.length>190?"…":"");
+  const from=Math.max(0, at-90), to=Math.min(t.length, at+150);
+  let out=esc(t.slice(from,to));
+  toks.forEach(k=>{
+    out=out.replace(new RegExp("("+k.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","gi"),
+      `<span style="background:rgba(195,245,60,.2); color:var(--blood-2)">$1</span>`);
+  });
+  return (from>0?"…":"")+out+(to<t.length?"…":"");
+}
+
+async function techAsk(box){
+  const pid=techPid();
+  await refreshDrills();
+  const [{data:docs},{data:fb}] = await Promise.all([
+    sb.from("tech_docs").select("*").eq("player_id",pid),
+    sb.from("tech_feedback").select("*").eq("player_id",pid).order("created_at",{ascending:false})
+  ]);
+  const feedback=fb||[];
+  const knownTags=[...new Set(FAULT_TAGS.concat(
+    (docs||[]).flatMap(d=>d.tags||[]).map(t=>t.trim()).filter(Boolean)))];
+
+  box.innerHTML=`
+    <div class="card">
+      <label class="mini">Ask about your game</label>
+      <input id="askq" value="${esc(askQ)}" placeholder="why am I missing right with driver">
+      <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:9px">
+        ${knownTags.map(t=>`<button class="btn btn-ghost btn-sm atag ${askTags.includes(t)?"on":""}"
+          data-t="${esc(t)}" style="width:auto; padding:5px 9px; ${askTags.includes(t)?"background:var(--blood-2); color:var(--lime-ink); border-color:var(--blood-2)":""}">${esc(t)}</button>`).join("")}
+      </div>
+      <button class="btn btn-primary btn-sm" id="askgo" style="margin-top:11px">Search</button>
+      <p class="who" style="margin:9px 0 0">Searches your blueprint, your documents, your own notes and your drills. Nothing leaves the app.</p>
+    </div>
+    <div id="askres" style="margin-top:14px"></div>`;
+
+  const q=document.getElementById("askq");
+  q.oninput=()=>{ askQ=q.value; };
+  q.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); run(); } };
+  document.getElementById("askgo").onclick=()=>run();
+  box.querySelectorAll(".atag").forEach(b=>b.onclick=()=>{
+    const t=b.dataset.t;
+    askTags = askTags.includes(t) ? askTags.filter(x=>x!==t) : askTags.concat([t]);
+    keepScroll(()=>techAsk(box));
+  });
+
+  function items(){
+    const out=[];
+    BLUEPRINT.forEach(s=>s.rows.forEach((r,i)=>out.push({
+      kind:"blueprint", key:`bp:${s.name}:${i}`,
+      label:`${s.name} · ${s.phase} · ${r[0]}`.replace(" ·  · "," · "),
+      sub:"", text:r[1], tags:[s.name.toLowerCase()], colour:s.colour
+    })));
+    (docs||[]).forEach(d=>out.push({
+      kind:"doc", key:"doc:"+d.id, label:d.title, sub:[d.source,fmtDocDate(d.doc_date)].filter(Boolean).join(" · "),
+      text:d.body||"", tags:d.tags||[]
+    }));
+    feedback.filter(f=>f.note).forEach(f=>out.push({
+      kind:"note", key:"note:"+f.id, label:"Your note", 
+      sub:[f.item_label,new Date(f.created_at).toLocaleDateString(undefined,{day:'numeric',month:'short'})].filter(Boolean).join(" · "),
+      text:f.note, tags:f.tag?[f.tag]:[]
+    }));
+    Object.values(drillMap).forEach(d=>out.push({
+      kind:"drill", key:"drill:"+d.id, label:d.name, sub:d.category||"",
+      text:[d.why,d.goal,d.default_club,d.distance].filter(Boolean).join(" · "),
+      tags:[d.category||""], drill:d
+    }));
+    return out;
+  }
+
+  function fbFor(key){
+    const rows=feedback.filter(f=>f.item_key===key);
+    return {
+      rows,
+      yes:rows.filter(r=>r.verdict==="yes").length,
+      no:rows.filter(r=>r.verdict==="no").length,
+      maybe:rows.filter(r=>r.verdict==="maybe").length
+    };
+  }
+
+  function run(){
+    const res=document.getElementById("askres");
+    const toks=askTokens(askQ).concat(askTags.flatMap(t=>askTokens(t)));
+    const uniq=[...new Set(toks)];
+    if(!uniq.length){
+      res.innerHTML=`<div class="empty">Type a question or tap a tag.</div>`;
+      return;
+    }
+    const scored=[];
+    items().forEach(it=>{
+      const hay=(it.label+" "+(it.sub||"")+" "+it.text).toLowerCase();
+      let s=0, hits=0;
+      uniq.forEach(t=>{ if(hay.includes(t)){ hits++; s+=2; if(it.label.toLowerCase().includes(t)) s+=2; } });
+      askTags.forEach(t=>{
+        if((it.tags||[]).some(x=>String(x).toLowerCase()===t.toLowerCase())){ s+=7; hits++; }
+      });
+      if(!hits) return;
+      const f=fbFor(it.key);
+      s += f.yes*3 + f.maybe - f.no*3;
+      scored.push({it, s, f});
+    });
+    scored.sort((a,b)=>b.s-a.s);
+
+    if(!scored.length){
+      res.innerHTML=`<div class="empty">Nothing matched. Add the lesson or note under <b>Documents</b> and it'll be here next time.</div>`;
+      return;
+    }
+
+    const groups=[["doc","Your documents"],["note","Your notes"],["blueprint","Blueprint"],["drill","Drills"]];
+    res.innerHTML = groups.map(([kind,label])=>{
+      const rows=scored.filter(x=>x.it.kind===kind).slice(0, kind==="blueprint"?4:6);
+      if(!rows.length) return "";
+      return `<div style="margin-bottom:16px">
+        <div class="who" style="margin-bottom:7px">${label} · ${rows.length}</div>
+        ${rows.map(({it,f})=>askCard(it,f,uniq)).join("")}
+      </div>`;
+    }).join("") + worked();
+
+    res.querySelectorAll(".fbv").forEach(b=>b.onclick=()=>sendFeedback(b.dataset.k, b.dataset.l, b.dataset.v));
+    res.querySelectorAll(".fbnote").forEach(b=>b.onclick=()=>sendFeedback(b.dataset.k, b.dataset.l, null));
+    res.querySelectorAll(".addday").forEach(b=>b.onclick=()=>addDrillToDay(b.dataset.d, b));
+  }
+
+  function askCard(it,f,toks){
+    const dim = f.no>0 && f.yes===0;
+    const badge = f.yes||f.no
+      ? `<span class="pill" style="background:${f.yes>=f.no?"rgba(195,245,60,.18)":"rgba(224,111,111,.15)"}; color:${f.yes>=f.no?"var(--blood-2)":"#e06f6f"}">${f.yes} ✓ · ${f.no} ✗</span>`
+      : "";
+    const notes=f.rows.filter(r=>r.note).slice(0,2);
+    return `<div class="card" style="margin-top:8px; ${it.colour?`border-left:3px solid ${it.colour}`:""}; ${dim?"opacity:.6":""}">
+      <div class="inline" style="margin-bottom:5px; gap:8px">
+        <b style="font-size:13px; color:${it.kind==="blueprint"?"var(--muted)":"var(--blood-2)"}">${esc(it.label)}</b>
+        ${badge}
+      </div>
+      ${it.sub?`<div class="who" style="margin-bottom:6px">${esc(it.sub)}</div>`:""}
+      <div style="font-size:13px; color:var(--ink); line-height:1.5">${askSnippet(it.text,toks)}</div>
+      ${it.drill?`<button class="btn btn-ghost btn-sm addday" data-d="${it.drill.id}" style="width:auto; margin-top:9px">Add to day plan</button>`:""}
+      ${notes.length?`<div style="margin-top:9px; border-top:1px solid var(--line); padding-top:8px">
+        ${notes.map(n=>`<div style="font-size:12px; color:var(--muted); margin-bottom:4px">
+          <span style="color:var(--blood-2)">${n.verdict==="yes"?"✓":n.verdict==="no"?"✗":n.verdict==="maybe"?"~":"•"}</span>
+          ${esc(n.note)} <span style="color:var(--faint)">· ${new Date(n.created_at).toLocaleDateString(undefined,{day:'numeric',month:'short'})}</span></div>`).join("")}
+      </div>`:""}
+      <div style="display:flex; gap:6px; margin-top:9px">
+        <button class="btn btn-ghost btn-sm fbv" data-k="${esc(it.key)}" data-l="${esc(it.label)}" data-v="yes" style="flex:1; width:auto">✓ Worked</button>
+        <button class="btn btn-ghost btn-sm fbv" data-k="${esc(it.key)}" data-l="${esc(it.label)}" data-v="maybe" style="flex:1; width:auto">~ Maybe</button>
+        <button class="btn btn-ghost btn-sm fbv" data-k="${esc(it.key)}" data-l="${esc(it.label)}" data-v="no" style="flex:1; width:auto">✗ Didn't</button>
+      </div>
+      <div style="display:flex; gap:6px; margin-top:6px">
+        <input class="fbtxt" id="n-${esc(it.key)}" placeholder="Add a note — it becomes searchable too" style="flex:1">
+        <button class="btn btn-ghost btn-sm fbnote" data-k="${esc(it.key)}" data-l="${esc(it.label)}" style="width:auto">Save</button>
+      </div>
+    </div>`;
+  }
+
+  function worked(){
+    const tagged = askTags.length ? feedback.filter(f=>askTags.includes(f.tag)) : feedback;
+    if(!tagged.length) return "";
+    const by={};
+    tagged.forEach(f=>{
+      const k=f.item_key;
+      by[k]=by[k]||{label:f.item_label||k, yes:0, no:0};
+      if(f.verdict==="yes") by[k].yes++;
+      if(f.verdict==="no") by[k].no++;
+    });
+    const list=Object.values(by).filter(x=>x.yes||x.no).sort((a,b)=>(b.yes-b.no)-(a.yes-a.no)).slice(0,5);
+    if(!list.length) return "";
+    return `<div style="margin-top:6px">
+      <div class="who" style="margin-bottom:7px">What's worked${askTags.length?" · "+esc(askTags.join(", ")):""}</div>
+      <div class="card" style="padding:0">
+        ${list.map(x=>`<div style="display:flex; justify-content:space-between; gap:10px; padding:9px 13px; border-bottom:1px solid var(--line); font-size:13px">
+          <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(x.label)}</span>
+          <span style="white-space:nowrap; color:${x.yes>=x.no?"var(--blood-2)":"#e06f6f"}">${x.yes} ✓ · ${x.no} ✗</span>
+        </div>`).join("")}
+      </div>
+      <p class="who" style="margin-top:8px; text-transform:none; letter-spacing:0; font-size:11px">
+        Crossed items drop down the list, they're never deleted — something that stops working can come back.</p>
+    </div>`;
+  }
+
+  async function sendFeedback(key,label,verdict){
+    if(me.role!=="player"){ flash("Only you can leave feedback"); return; }
+    const field=document.getElementById("n-"+key);
+    const note=field?field.value.trim():"";
+    if(!verdict && !note){ flash("Type a note first"); return; }
+    const {error}=await sb.from("tech_feedback").insert({
+      player_id:me.id, item_key:key, item_label:label,
+      tag: askTags[0] || askQ.trim().slice(0,60) || null,
+      verdict: verdict, note: note||null
+    });
+    if(error){ flash("Couldn't save: "+error.message); return; }
+    flash(verdict==="yes"?"Noted — this'll rank higher":verdict==="no"?"Noted — pushed down":"Saved");
+    keepScroll(()=>techAsk(box));
+  }
+
+  async function addDrillToDay(drillId, btn){
+    if(me.role!=="player"){ flash("Only you can add drills"); return; }
+    const {count}=await sb.from("sessions").select("id",{count:"exact",head:true})
+      .eq("player_id",me.id).eq("logged_on",activeDay);
+    const {error}=await sb.from("sessions").insert({
+      player_id:me.id, created_by:me.id, drill_id:drillId,
+      logged_on:activeDay, sort:(count||0), minutes:null, balls:0,
+      status:"pending", completed:false
+    });
+    if(error){ flash("Couldn't add: "+error.message); return; }
+    btn.textContent="Added to "+activeDay;
+    flash("Added to your day plan");
+  }
+
+  if(askQ || askTags.length) run();
+  else document.getElementById("askres").innerHTML=
+    `<div class="empty">Ask something, or tap a tag. Add lessons and notes under <b>Documents</b> and they get searched too.</div>`;
 }
 
 /* ============================================================

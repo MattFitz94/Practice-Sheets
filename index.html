@@ -328,6 +328,8 @@ function saveView(){
     if(!currentTab) return;
     localStorage.setItem(VIEW_KEY, JSON.stringify({
       tab: currentTab,
+      planView: planView,
+      schedView: schedView,
       day: typeof activeDay!=="undefined" ? activeDay : null,
       sched: typeof schedDay!=="undefined" ? schedDay : null,
       week: typeof weekStart!=="undefined" ? weekStart : null,
@@ -461,14 +463,24 @@ sb.auth.onAuthStateChange((event, session)=>{
    ============================================================ */
 let currentTab=null;
 let _tabScrollX=0;
+/* Merged tabs: Practice Plan holds Day + Week, Schedule holds Timeline + Build. */
+let planView="day";
+let schedView="timeline";
 function shell(){
   const tabs = me.role==="coach"
-    ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["players","Players"],["library","Drills"],["technical","Technical"],["progress","Progress"]]
+    ? [["plan","Practice Plan"],["sched","Schedule"],["season","Season"],["results","Data Golf Stats"],["players","Players"],["library","Drills"],["technical","Technical"],["progress","Progress"]]
     : me.role==="viewer"
-    ? [["day","Day Plan"],["week","Week"],["sched","Schedule"],["season","Season"],["results","Results"],["technical","Technical"],["progress","Progress"]]
-    : [["day","Day Plan"],["week","Week"],["sched","Schedule"],["build","Build a day"],["library","Drills"],["technical","Technical"],["season","Season"],["results","Results"],["team",pendingCount?`Team (${pendingCount})`:"Team"],["progress","Progress"]];
+    ? [["plan","Practice Plan"],["sched","Schedule"],["season","Season"],["results","Data Golf Stats"],["technical","Technical"],["progress","Progress"]]
+    : [["plan","Practice Plan"],["sched","Schedule"],["library","Drills"],["technical","Technical"],["season","Season"],["results","Data Golf Stats"],["progress","Progress"],["team",pendingCount?`Team Access (${pendingCount})`:"Team Access"]];
   if(!currentTab){
     const sv=loadView();
+    if(sv){
+      /* saved views from before the merge still name the old tabs */
+      if(sv.tab==="day"||sv.tab==="week"){ planView=sv.tab; sv.tab="plan"; }
+      else if(sv.tab==="build"){ schedView="build"; sv.tab="sched"; }
+      if(sv.planView==="day"||sv.planView==="week") planView=sv.planView;
+      if(sv.schedView==="timeline"||sv.schedView==="build") schedView=sv.schedView;
+    }
     if(sv && tabs.some(t=>t[0]===sv.tab)){
       currentTab=sv.tab;
       if(sv.day) activeDay=sv.day;
@@ -510,10 +522,8 @@ function shell(){
 function renderTab(){
   const v=document.getElementById("tabview");
   v.innerHTML=`<div class="load">Loading</div>`;
-  if(currentTab==="day") dayScreen(v);
-  else if(currentTab==="week") weekScreen(v);
-  else if(currentTab==="sched") scheduleScreen(v);
-  else if(currentTab==="build") buildScreen(v);
+  if(currentTab==="plan") planScreen(v);
+  else if(currentTab==="sched") schedTabScreen(v);
   else if(currentTab==="results") resultsScreen(v);
   else if(currentTab==="season") seasonScreen(v);
   else if(currentTab==="team") teamScreen(v);
@@ -521,6 +531,52 @@ function renderTab(){
   else if(currentTab==="library") library(v);
   else if(currentTab==="technical") technicalScreen(v);
   else if(currentTab==="progress") progress(v);
+}
+
+/* ------------------------------------------------------------
+   MERGED TABS
+   Practice Plan wraps the day sheet and the week board; Schedule
+   wraps the timeline and the day builder. Each sub-screen keeps
+   its own code untouched — it just renders into the box below the
+   toggle instead of straight into the tab, so re-renders from
+   inside a sub-screen leave the toggle alone.
+   ------------------------------------------------------------ */
+function subToggle(views, active){
+  return `<div class="daybar subbar" style="margin-bottom:10px">${
+    views.map(x=>`<button class="btn ${x[0]===active?"btn-primary":"btn-ghost"} btn-sm sv"
+      data-v="${x[0]}" style="width:auto">${x[1]}</button>`).join("")
+  }</div>`;
+}
+
+async function planScreen(v){
+  v.innerHTML = subToggle([["day","Day plan"],["week","Week"]], planView)
+    + `<div id="planbody"><div class="load">Loading</div></div>`;
+  v.querySelectorAll(".sv").forEach(b=>b.onclick=()=>{
+    if(planView===b.dataset.v) return;
+    planView=b.dataset.v; saveView();
+    keepScroll(()=>planScreen(v));
+  });
+  const body=document.getElementById("planbody");
+  if(!body) return;
+  if(planView==="week") await weekScreen(body);
+  else await dayScreen(body);
+}
+
+async function schedTabScreen(v){
+  const canBuild = me.role==="player";
+  const views = canBuild ? [["timeline","Timeline"],["build","Build a day"]] : [["timeline","Timeline"]];
+  if(!canBuild) schedView="timeline";
+  v.innerHTML = subToggle(views, schedView)
+    + `<div id="schedviewbody"><div class="load">Loading</div></div>`;
+  v.querySelectorAll(".sv").forEach(b=>b.onclick=()=>{
+    if(schedView===b.dataset.v) return;
+    schedView=b.dataset.v; saveView();
+    keepScroll(()=>schedTabScreen(v));
+  });
+  const body=document.getElementById("schedviewbody");
+  if(!body) return;
+  if(schedView==="build") await buildScreen(body);
+  else await scheduleScreen(body);
 }
 
 /* ============================================================
@@ -1760,7 +1816,7 @@ async function scheduleScreen(v){
   body.innerHTML=renderTimeline(layout,{linkPractice: me.role==="player"});
   if(me.role==="player"){
     body.querySelectorAll("[data-jump]").forEach(el=>el.onclick=()=>{
-      activeDay=schedDay; currentTab="day"; shell();
+      activeDay=schedDay; currentTab="plan"; planView="day"; shell();
     });
   }
 }

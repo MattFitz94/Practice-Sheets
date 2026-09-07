@@ -2466,20 +2466,15 @@ function coachBar(b, names){
 }
 
 function editCoachWeek(w, blocks, names, box){
-  const mine=blocks.filter(b=>b.week===w.week);
+  let mine=blocks.filter(b=>b.week===w.week);
+  let dirty=false;
   const wrap=document.createElement("div"); wrap.className="cmodal";
   wrap.innerHTML=`<div class="cbox">
     <div class="chead"><div><b>Week ${w.week} · ${esc(w.tournament||w.status||"—")}</b>
       <div class="who">${[w.course,w.city,w.country].filter(Boolean).map(esc).join(", ")||"&nbsp;"}</div></div>
       <button class="cx" id="cwx">×</button></div>
     <div class="clist" style="padding:14px 16px">
-      <div id="cwmine">${mine.length?mine.map(b=>`
-        <div class="row-item" style="align-items:center">
-          <i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${coachColour(b.coach,names)};margin-right:8px"></i>
-          <div class="name">${esc(b.coach)}<small>${DAY_NAMES[b.day_from-1]}${b.day_to>b.day_from?" – "+DAY_NAMES[b.day_to-1]:""}${b.location?" · "+esc(b.location):""}</small></div>
-          <button class="btn btn-ghost btn-sm cwdel" data-id="${b.id}" style="width:auto; color:#e0864f">Remove</button>
-        </div>`).join(""):`<div class="who">Nobody with you this week yet.</div>`}</div>
-
+      <div id="cwmine"></div>
       <div style="border-top:1px solid var(--line); margin-top:12px; padding-top:12px">
         <label class="mini">Coach</label>
         <select id="cw-name">
@@ -2501,27 +2496,49 @@ function editCoachWeek(w, blocks, names, box){
       </div>
     </div>
     <div class="cfoot">
-      <button class="btn btn-ghost btn-sm" id="cw-close">Close</button>
+      <button class="btn btn-ghost btn-sm" id="cw-close">Done</button>
       <button class="btn btn-primary btn-sm" id="cw-add" style="margin-left:auto; width:auto">Add to week</button>
     </div></div>`;
   document.body.appendChild(wrap);
-  const close=()=>wrap.remove();
+
+  /* The grid behind only redraws when you're finished, so adding four coaches
+     is four taps of Add rather than four trips in and out of the week. */
+  const close=()=>{ wrap.remove(); if(dirty) coachesScreen(box); };
   wrap.onclick=e=>{ if(e.target===wrap) close(); };
   document.getElementById("cwx").onclick=close;
   document.getElementById("cw-close").onclick=close;
 
   const nameSel=document.getElementById("cw-name");
   nameSel.onchange=()=>{
-    const box2=document.getElementById("cw-new");
-    box2.style.display = nameSel.value==="__new" ? "block" : "none";
-    if(nameSel.value==="__new") box2.focus();
+    const nb=document.getElementById("cw-new");
+    nb.style.display = nameSel.value==="__new" ? "block" : "none";
+    if(nameSel.value==="__new") nb.focus();
   };
 
-  wrap.querySelectorAll(".cwdel").forEach(b=>b.onclick=async()=>{
-    const {error}=await sb.from("coach_weeks").delete().eq("id",b.dataset.id);
-    if(error){ flash("Couldn't remove: "+error.message); return; }
-    flash("Removed"); close(); coachesScreen(box);
-  });
+  function drawMine(){
+    const list=document.getElementById("cwmine");
+    const all=[...new Set(names.concat(mine.map(m=>m.coach)))];
+    list.innerHTML = mine.length ? mine.map(b=>`
+      <div class="row-item" style="align-items:center">
+        <i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${coachColour(b.coach,all)};margin-right:8px"></i>
+        <div class="name">${esc(b.coach)}<small>${DAY_NAMES[b.day_from-1]}${b.day_to>b.day_from?" – "+DAY_NAMES[b.day_to-1]:""}${b.location?" · "+esc(b.location):""}</small></div>
+        <button class="btn btn-ghost btn-sm cwdel" data-id="${b.id}" style="width:auto; color:#e0864f">Remove</button>
+      </div>`).join("")
+      : `<div class="who">Nobody with you this week yet. Add as many coaches as you need — one at a time, each with their own days.</div>`;
+    list.querySelectorAll(".cwdel").forEach(b=>b.onclick=async()=>{
+      const {error}=await sb.from("coach_weeks").delete().eq("id",b.dataset.id);
+      if(error){ flash("Couldn't remove: "+error.message); return; }
+      dirty=true; flash("Removed"); await reload();
+    });
+  }
+
+  async function reload(){
+    const pid = me.role==="player" ? me.id : activePlayerId;
+    const {data}=await sb.from("coach_weeks").select("*")
+      .eq("player_id",pid).eq("year",seasonYear).eq("week",w.week).order("day_from");
+    mine=data||[];
+    drawMine();
+  }
 
   document.getElementById("cw-add").onclick=async()=>{
     const msg=document.getElementById("cw-msg");
@@ -2536,8 +2553,16 @@ function editCoachWeek(w, blocks, names, box){
       day_from:from, day_to:to, location:val("cw-loc")||null
     });
     if(error){ msg.innerHTML=`<div class="err">${esc(error.message)}</div>`; return; }
-    flash("Added"); close(); coachesScreen(box);
+    dirty=true; msg.innerHTML="";
+    flash(name+" added");
+    nameSel.value=""; document.getElementById("cw-new").style.display="none";
+    document.getElementById("cw-new").value="";
+    document.getElementById("cw-from").value="1";
+    document.getElementById("cw-to").value="7";
+    await reload();
   };
+
+  drawMine();
 }
 
 function weekTier(w){
